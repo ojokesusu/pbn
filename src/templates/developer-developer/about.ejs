@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tentang - <%= siteName %></title>
+    <meta name="description" content="Pelajari lebih lanjut tentang <%= siteName %>. <%= siteDescription %>">
+    <link rel="canonical" href="<%= siteUrl %>/about.html">
+    <link href="https://fonts.googleapis.com/css2?family=<%= fontFamily.replace(/ /g, '+') %>:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+    <!-- Top Date Strip -->
+    <div class="np-topstrip">
+        <div class="np-container">
+            <div class="np-topstrip-inner">
+                <span class="np-topstrip-date"><%= new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) %></span>
+                <div class="np-topstrip-social">
+                    <span class="np-social-link">Facebook</span>
+                    <span class="np-social-link">Twitter</span>
+                    <span class="np-social-link">Instagram</span>
+                    <span class="np-social-link">RSS</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Site Name Bar -->
+    <header class="np-header">
+        <div class="np-container">
+            <div class="np-header-inner">
+                <% if (headerStyle === 'centered') { %>
+                <div class="np-header-centered">
+                    <h1 class="np-site-title"><a href="<%= siteUrl %>"><%= siteName %></a></h1>
+                    <p class="np-site-tagline"><%= siteDescription %></p>
+                </div>
+                <% } else if (headerStyle === 'minimal') { %>
+                <div class="np-header-minimal">
+                    <h1 class="np-site-title"><a href="<%= siteUrl %>"><%= siteName %></a></h1>
+                </div>
+                <% } else { %>
+                <div class="np-header-left">
+                    <h1 class="np-site-title"><a href="<%= siteUrl %>"><%= siteName %></a></h1>
+                    <p class="np-site-tagline"><%= siteDescription %></p>
+                </div>
+                <% } %>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Bar -->
+    <nav class="np-navbar">
+        <div class="np-container">
+            <button class="np-nav-toggle" aria-label="Toggle navigasi">&#9776; Menu</button>
+            <ul class="np-nav-menu">
+                <li class="np-nav-item"><a href="<%= siteUrl %>" class="np-nav-link">Beranda</a></li>
+                <% categories.forEach(function(cat) { %>
+                <li class="np-nav-item"><a href="/category/<%= cat.slug %>.html" class="np-nav-link"><%= cat.name %></a></li>
+                <% }); %>
+                <li class="np-nav-item"><a href="/about.html" class="np-nav-link np-nav-active">Tentang</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Breadcrumb -->
+    <div class="np-breadcrumb-bar">
+        <div class="np-container">
+            <nav class="np-breadcrumb" aria-label="Breadcrumb">
+                <a href="<%= siteUrl %>">Beranda</a>
+                <span class="np-breadcrumb-sep">&rsaquo;</span>
+                <span class="np-breadcrumb-current">Tentang</span>
+            </nav>
+        </div>
+    </div>
+
+    <!-- About Content -->
+    <main class="np-main">
+        <div class="np-container">
+            <div class="np-content-grid">
+                <div class="np-articles-col">
+                    <div class="np-about-page">
+                        <h2 class="np-about-title">Tentang <%= siteName %></h2>
+
+                        <div class="np-about-intro">
+                            <p><%= siteDescription %></p>
+                        </div>
+
+                        <div class="np-about-section">
+                            <h3 class="np-about-heading">Misi Kami</h3>
+                            <p>Kami berkomitmen untuk menyajikan konten yang akurat, tepat waktu, dan mendalam. Tim penulis dan editor kami yang berdedikasi bekerja tanpa henti untuk menghadirkan cerita-cerita yang membentuk dunia kita.</p>
+                        </div>
+
+                        <div class="np-about-section">
+                            <h3 class="np-about-heading">Topik Bahasan Kami</h3>
+                            <p>Dari berita terkini hingga analisis mendalam, kami membahas berbagai topik yang dirancang untuk membuat Anda tetap terinformasi dan terlibat. Standar editorial kami memastikan setiap artikel memenuhi tolok ukur kualitas tertinggi.</p>
+                            <ul class="np-about-list">
+                                <% categories.forEach(function(cat) { %>
+                                <li><strong><%= cat.name %></strong><% if (cat.description) { %> &mdash; <%= cat.description %><% } %></li>
+                                <% }); %>
+                            </ul>
+                        </div>
+
+                        <div class="np-about-section">
+                            <h3 class="np-about-heading">Standar Editorial</h3>
+                            <p>Setiap artikel yang diterbitkan di <%= siteName %> melalui proses tinjauan editorial yang menyeluruh. Kami percaya pada transparansi, akurasi, dan keadilan dalam semua pemberitaan kami. Komitmen kami terhadap prinsip-prinsip ini adalah yang membedakan kami.</p>
+                        </div>
+
+                        <div class="np-about-section">
+                            <h3 class="np-about-heading">Hubungi Kami</h3>
+                            <p>Kami menghargai masukan Anda dan menyambut kontribusi Anda. Baik Anda memiliki tips berita, koreksi, atau sekadar ingin berbagi pendapat, kami dengan senang hati mendengar dari Anda.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sidebar -->
+                <aside class="np-sidebar">
+                    <div class="np-sidebar-widget">
+                        <h3 class="np-widget-title">Kategori</h3>
+                        <ul class="np-category-list">
+                            <% categories.forEach(function(cat) { %>
+                            <li class="np-category-item">
+                                <a href="/category/<%= cat.slug %>.html" class="np-category-link">
+                                    <span class="np-category-name"><%= cat.name %></span>
+                                </a>
+                            </li>
+                            <% }); %>
+                        </ul>
+                    </div>
+                </aside>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="np-footer">
+        <div class="np-container">
+            <div class="np-footer-grid">
+                <div class="np-footer-col">
+                    <h4 class="np-footer-heading"><%= siteName %></h4>
+                    <p class="np-footer-about"><%= siteDescription %></p>
+                </div>
+                <div class="np-footer-col">
+                    <h4 class="np-footer-heading">Kategori</h4>
+                    <ul class="np-footer-links">
+                        <% categories.slice(0, 6).forEach(function(cat) { %>
+                        <li><a href="/category/<%= cat.slug %>.html"><%= cat.name %></a></li>
+                        <% }); %>
+                    </ul>
+                </div>
+                <div class="np-footer-col">
+                    <h4 class="np-footer-heading">Tautan Cepat</h4>
+                    <ul class="np-footer-links">
+                        <li><a href="<%= siteUrl %>">Beranda</a></li>
+                        <li><a href="/about.html">Tentang Kami</a></li>
+                        <li><a href="/sitemap.xml">Sitemap</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="np-footer-bottom">
+            <div class="np-container">
+                <p class="np-copyright">&copy; <%= new Date().getFullYear() %> <%= siteName %>. Hak cipta dilindungi.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var toggle = document.querySelector('.np-nav-toggle');
+        var menu = document.querySelector('.np-nav-menu');
+        if (toggle && menu) {
+            toggle.addEventListener('click', function() {
+                menu.classList.toggle('np-nav-open');
+                toggle.classList.toggle('np-toggle-active');
+            });
+        }
+    });
+    </script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tentang - <%= siteName %></title>
+  <meta name="description" content="Pelajari lebih lanjut tentang <%= siteName %>. <%= siteDescription %>">
+  <link rel="canonical" href="<%= siteUrl %>/about.html">
+  <link href="https://fonts.googleapis.com/css2?family=<%= fontFamily.replace(/ /g, '+') %>:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header class="dv-topbar">
+    <div class="dv-topbar-inner">
+      <a href="<%= siteUrl %>" class="dv-logo">
+        <span class="dv-logo-icon">&lt;/&gt;</span>
+        <%= siteName %>
+      </a>
+      <button class="dv-hamburger" onclick="document.querySelector('.dv-nav').classList.toggle('dv-nav-open')" aria-label="Toggle navigasi">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="dv-nav">
+        <a href="<%= siteUrl %>">Beranda</a>
+        <% categories.slice(0, 5).forEach(function(cat) { %>
+          <a href="<%= siteUrl %>/category/<%= cat.slug %>.html"><%= cat.name %></a>
+        <% }); %>
+        <a href="<%= siteUrl %>/about.html" class="dv-active">Tentang</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Page Header -->
+  <section class="dv-page-header">
+    <div class="dv-container">
+      <div class="dv-breadcrumbs" style="color: #8a90a0; margin-bottom: 0.5rem;">
+        <a href="<%= siteUrl %>" style="color: #8a90a0;">Beranda</a>
+        <span class="dv-bc-sep">/</span>
+        <span style="color: #c4c9d4;">Tentang</span>
+      </div>
+      <h1>Tentang <%= siteName %></h1>
+      <p><%= siteDescription %></p>
+    </div>
+  </section>
+
+  <!-- Main Layout -->
+  <div class="dv-container">
+    <div class="dv-layout">
+
+      <!-- Main Content -->
+      <main class="dv-main">
+        <div class="dv-about-content">
+
+          <h2>Siapa Kami</h2>
+          <p>Selamat datang di <strong><%= siteName %></strong>. Kami adalah tim penulis, pengembang, dan profesional industri yang berdedikasi untuk menghadirkan konten berkualitas tinggi yang menginformasikan, mengedukasi, dan menginspirasi pembaca kami.</p>
+
+          <p>Publikasi kami didirikan atas keyakinan bahwa pengetahuan harus dapat diakses oleh semua orang. Baik Anda seorang profesional berpengalaman maupun baru memulai, artikel kami dirancang untuk memberikan nilai di setiap tingkat keahlian.</p>
+
+          <h2>Misi Kami</h2>
+          <p>Di <%= siteName %>, misi kami sederhana: menyediakan konten yang penuh pemikiran dan diteliti dengan baik untuk membantu pembaca kami tetap terinformasi dan membuat keputusan yang lebih baik. Kami membahas berbagai topik di seluruh kategori kami, selalu mengutamakan akurasi dan kedalaman.</p>
+
+          <p>Setiap artikel yang diterbitkan di situs ini melalui proses editorial yang cermat. Kami mengutamakan kualitas daripada kuantitas, memastikan setiap artikel memenuhi standar kami sebelum sampai kepada Anda.</p>
+
+          <h2>Topik Bahasan</h2>
+          <p>Konten kami mencakup berbagai bidang yang diminati, diorganisir ke dalam kategori-kategori terfokus:</p>
+          <ul>
+            <% categories.forEach(function(cat) { %>
+              <li><strong><a href="<%= siteUrl %>/category/<%= cat.slug %>.html"><%= cat.name %></a></strong><% if (cat.description) { %> &mdash; <%= cat.description %><% } %></li>
+            <% }); %>
+          </ul>
+
+          <h2>Hubungi Kami</h2>
+          <p>Kami sangat menghargai masukan dari pembaca. Baik Anda memiliki saran topik yang ingin kami bahas, koreksi untuk dilaporkan, atau sekadar ingin menyapa, kami senang mendengar dari Anda.</p>
+
+          <p>Terima kasih telah mengunjungi <%= siteName %>. Kami berharap konten kami bermanfaat dan menantikan Anda sebagai pembaca setia.</p>
+
+        </div>
+      </main>
+
+      <!-- Sidebar -->
+      <aside class="dv-sidebar">
+
+        <!-- About Widget -->
+        <div class="dv-widget">
+          <h3 class="dv-widget-title">Tentang</h3>
+          <p class="dv-widget-about-text"><%= siteDescription %></p>
+        </div>
+
+        <!-- Categories Widget -->
+        <div class="dv-widget dv-widget-categories">
+          <h3 class="dv-widget-title">Kategori</h3>
+          <ul>
+            <% categories.forEach(function(cat) { %>
+              <li>
+                <a href="<%= siteUrl %>/category/<%= cat.slug %>.html">
+                  <%= cat.name %>
+                  <span class="dv-cat-arrow">&rarr;</span>
+                </a>
+              </li>
+            <% }); %>
+          </ul>
+        </div>
+
+      </aside>
+
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="dv-footer">
+    <div class="dv-footer-main">
+      <div>
+        <h4 class="dv-footer-heading"><%= siteName %></h4>
+        <p class="dv-footer-about-text"><%= siteDescription %></p>
+      </div>
+      <div>
+        <h4 class="dv-footer-heading">Kategori</h4>
+        <ul class="dv-footer-links">
+          <% categories.forEach(function(cat) { %>
+            <li><a href="<%= siteUrl %>/category/<%= cat.slug %>.html"><%= cat.name %></a></li>
+          <% }); %>
+        </ul>
+      </div>
+      <div>
+        <h4 class="dv-footer-heading">Tautan Cepat</h4>
+        <ul class="dv-footer-links">
+          <li><a href="<%= siteUrl %>">Beranda</a></li>
+          <li><a href="<%= siteUrl %>/about.html">Tentang</a></li>
+          <li><a href="<%= siteUrl %>/sitemap.xml">Peta Situs</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="dv-footer-bottom">
+      &copy; <%= new Date().getFullYear() %> <%= siteName %>. Hak cipta dilindungi.
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= siteName %> — Berita Terkini Hari Ini</title>
+  <meta name="description" content="<%= siteDescription %>">
+  <link rel="canonical" href="<%= siteUrl %>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=<%= encodeURIComponent(fontFamily).replace(/%20/g,'+') %>:wght@400;500;600;700&family=<%= encodeURIComponent(headingFont).replace(/%20/g,'+') %>:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <style><%- generatedCss %></style>
+</head>
+<body class="{{PREFIX}}-body">
+
+  <!-- Top utility bar -->
+  <div class="{{PREFIX}}-topbar">
+    <div class="{{PREFIX}}-container">
+      <div class="{{PREFIX}}-topbar-inner">
+        <span class="{{PREFIX}}-topbar-date"><%= new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) %></span>
+        <span class="{{PREFIX}}-topbar-tagline">Berita Terkini & Terpercaya</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main header -->
+  <header class="{{PREFIX}}-header">
+    <div class="{{PREFIX}}-container">
+      <div class="{{PREFIX}}-header-inner">
+        <a href="<%= siteUrl %>" class="{{PREFIX}}-brand">
+          <span class="{{PREFIX}}-brand-text"><%= siteName %></span>
+        </a>
+        <div class="{{PREFIX}}-header-meta">
+          <span class="{{PREFIX}}-tagline"><%= siteDescription %></span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="{{PREFIX}}-nav">
+    <div class="{{PREFIX}}-container">
+      <div class="{{PREFIX}}-nav-inner">
+        <a href="<%= siteUrl %>" class="{{PREFIX}}-nav-link {{PREFIX}}-nav-active">Beranda</a>
+        <% (categories || []).slice(0, 6).forEach(function(cat) { %>
+          <a href="<%= siteUrl %>/category/<%= cat.slug %>.html" class="{{PREFIX}}-nav-link"><%= cat.name %></a>
+        <% }); %>
+        <a href="<%= siteUrl %>/about.html" class="{{PREFIX}}-nav-link">Tentang</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="{{PREFIX}}-main">
+    <div class="{{PREFIX}}-container">
+
+      <% if (articles && articles.length > 0) { %>
+
+      <!-- Hero section: top story + 2 secondary -->
+      <% if (articles[0]) { %>
+      <section class="{{PREFIX}}-hero">
+        <a href="<%= siteUrl %>/articles/<%= articles[0].slug %>.html" class="{{PREFIX}}-hero-main">
+          <div class="{{PREFIX}}-hero-image">
+            <% if (articles[0].featuredImage) { %>
+              <img src="<%= articles[0].featuredImage %>" alt="<%= articles[0].title %>">
+            <% } else { %>
+              <div class="{{PREFIX}}-hero-placeholder"></div>
+            <% } %>
+          </div>
+          <div class="{{PREFIX}}-hero-content">
+            <% if (articles[0].category) { %><span class="{{PREFIX}}-badge"><%= articles[0].category %></span><% } %>
+            <h2 class="{{PREFIX}}-hero-title"><%= articles[0].title %></h2>
+            <p class="{{PREFIX}}-hero-excerpt"><%= articles[0].excerpt %></p>
+            <div class="{{PREFIX}}-meta">
+              <span class="{{PREFIX}}-meta-author"><%= articles[0].authorName %></span>
+              <span class="{{PREFIX}}-meta-sep">•</span>
+              <span class="{{PREFIX}}-meta-date"><%= articles[0].publishedAt %></span>
+            </div>
+          </div>
+        </a>
+
+        <div class="{{PREFIX}}-hero-side">
+          <% articles.slice(1, 3).forEach(function(article) { %>
+            <a href="<%= siteUrl %>/articles/<%= article.slug %>.html" class="{{PREFIX}}-hero-secondary">
+              <div class="{{PREFIX}}-hero-secondary-image">
+                <% if (article.featuredImage) { %>
+                  <img src="<%= article.featuredImage %>" alt="<%= article.title %>">
+                <% } else { %>
+                  <div class="{{PREFIX}}-hero-placeholder"></div>
+                <% } %>
+              </div>
+              <div class="{{PREFIX}}-hero-secondary-content">
+                <% if (article.category) { %><span class="{{PREFIX}}-badge {{PREFIX}}-badge-sm"><%= article.category %></span><% } %>
+                <h3 class="{{PREFIX}}-hero-secondary-title"><%= article.title %></h3>
+                <span class="{{PREFIX}}-meta-date"><%= article.publishedAt %></span>
+              </div>
+            </a>
+          <% }); %>
+        </div>
+      </section>
+      <% } %>
+
+      <!-- Section title -->
+      <div class="{{PREFIX}}-section-header">
+        <h2 class="{{PREFIX}}-section-title">Artikel Terbaru</h2>
+        <div class="{{PREFIX}}-section-line"></div>
+      </div>
+
+      <!-- Article grid -->
+      <section class="{{PREFIX}}-grid">
+        <% articles.slice(3).forEach(function(article) { %>
+          <article class="{{PREFIX}}-card">
+            <a href="<%= siteUrl %>/articles/<%= article.slug %>.html" class="{{PREFIX}}-card-image">
+              <% if (article.featuredImage) { %>
+                <img src="<%= article.featuredImage %>" alt="<%= article.title %>" loading="lazy">
+              <% } else { %>
+                <div class="{{PREFIX}}-card-placeholder"></div>
+              <% } %>
+              <% if (article.category) { %>
+                <span class="{{PREFIX}}-card-badge"><%= article.category %></span>
+              <% } %>
+            </a>
+            <div class="{{PREFIX}}-card-body">
+              <h3 class="{{PREFIX}}-card-title">
+                <a href="<%= siteUrl %>/articles/<%= article.slug %>.html"><%= article.title %></a>
+              </h3>
+              <p class="{{PREFIX}}-card-excerpt"><%= article.excerpt %></p>
+              <div class="{{PREFIX}}-card-meta">
+                <span><%= article.authorName %></span>
+                <span class="{{PREFIX}}-meta-sep">•</span>
+                <span><%= article.publishedAt %></span>
+              </div>
+            </div>
+          </article>
+        <% }); %>
+      </section>
+
+      <% } else { %>
+      <div class="{{PREFIX}}-empty">
+        <p>Belum ada artikel.</p>
+      </div>
+      <% } %>
+
+    </div>
+  </main>
+
+  <footer class="{{PREFIX}}-footer">
+    <div class="{{PREFIX}}-container">
+      <div class="{{PREFIX}}-footer-inner">
+        <div class="{{PREFIX}}-footer-col">
+          <h4 class="{{PREFIX}}-footer-title"><%= siteName %></h4>
+          <p class="{{PREFIX}}-footer-desc"><%= siteDescription %></p>
+        </div>
+        <div class="{{PREFIX}}-footer-col">
+          <h4 class="{{PREFIX}}-footer-title">Kategori</h4>
+          <ul class="{{PREFIX}}-footer-list">
+            <% (categories || []).slice(0, 6).forEach(function(cat) { %>
+              <li><a href="<%= siteUrl %>/category/<%= cat.slug %>.html"><%= cat.name %></a></li>
+            <% }); %>
+          </ul>
+        </div>
+        <div class="{{PREFIX}}-footer-col">
+          <h4 class="{{PREFIX}}-footer-title">Tautan</h4>
+          <ul class="{{PREFIX}}-footer-list">
+            <li><a href="<%= siteUrl %>">Beranda</a></li>
+            <li><a href="<%= siteUrl %>/about.html">Tentang Kami</a></li>
+            <li><a href="<%= siteUrl %>/feed.xml">RSS Feed</a></li>
+          </ul>
+        </div>
+        <% if (pbnLinks && pbnLinks.length > 0) { %>
+        <div class="{{PREFIX}}-footer-col">
+          <h4 class="{{PREFIX}}-footer-title">Rekomendasi</h4>
+          <ul class="{{PREFIX}}-footer-list">
+            <% pbnLinks.slice(0, 3).forEach(function(link) { %>
+              <li><a href="<%= link.url %>" target="_blank" rel="noopener"><%= link.name %></a></li>
+            <% }); %>
+          </ul>
+        </div>
+        <% } %>
+      </div>
+      <div class="{{PREFIX}}-footer-bottom">
+        <span>&copy; <%= new Date().getFullYear() %> <%= siteName %>. Hak Cipta Dilindungi.</span>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

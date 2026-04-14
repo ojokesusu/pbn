@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= article.title %> - <%= siteName %></title>
+  <meta name="description" content="<%= article.excerpt %>">
+  <link rel="canonical" href="<%= siteUrl %>/articles/<%= article.slug %>.html">
+  <link href="https://fonts.googleapis.com/css2?family=<%= fontFamily.replace(/ /g, '+') %>:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css">
+
+  <!-- JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "<%= article.title.replace(/"/g, '\\"') %>",
+    "description": "<%= article.excerpt ? article.excerpt.replace(/"/g, '\\"') : '' %>",
+    <% if (article.featuredImage) { %>"image": "<%= article.featuredImage %>",<% } %>
+    "author": {
+      "@type": "Person",
+      "name": "<%= article.authorName ? article.authorName.replace(/"/g, '\\"') : siteName %>"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "<%= siteName.replace(/"/g, '\\"') %>"
+    },
+    "datePublished": "<%= article.publishedAt %>",
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": "<%= siteUrl %>/articles/<%= article.slug %>.html"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header class="dv-topbar">
+    <div class="dv-topbar-inner">
+      <a href="<%= siteUrl %>" class="dv-logo">
+        <span class="dv-logo-icon">&lt;/&gt;</span>
+        <%= siteName %>
+      </a>
+      <button class="dv-hamburger" onclick="document.querySelector('.dv-nav').classList.toggle('dv-nav-open')" aria-label="Toggle navigasi">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="dv-nav">
+        <a href="<%= siteUrl %>">Beranda</a>
+        <% categories.slice(0, 5).forEach(function(cat) { %>
+          <a href="<%= siteUrl %>/category/<%= cat.slug %>.html" <% if (article.categorySlug === cat.slug) { %>class="dv-active"<% } %>><%= cat.name %></a>
+        <% }); %>
+        <a href="<%= siteUrl %>/about.html">Tentang</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <div class="dv-container">
+
+    <!-- Breadcrumbs -->
+    <div class="dv-breadcrumbs">
+      <a href="<%= siteUrl %>">Beranda</a>
+      <span class="dv-bc-sep">/</span>
+      <% if (article.category) { %>
+        <a href="<%= siteUrl %>/category/<%= article.categorySlug %>.html"><%= article.category %></a>
+        <span class="dv-bc-sep">/</span>
+      <% } %>
+      <span><%= article.title %></span>
+    </div>
+
+    <div class="dv-layout">
+
+      <!-- Main Content -->
+      <main class="dv-main">
+
+        <article class="dv-article-full">
+          <header class="dv-article-full-header">
+            <h1 class="dv-article-full-title"><%= article.title %></h1>
+            <div class="dv-article-full-meta">
+              <% if (article.category) { %>
+                <span>
+                  <a href="<%= siteUrl %>/category/<%= article.categorySlug %>.html" class="dv-article-card-category"><%= article.category %></a>
+                </span>
+              <% } %>
+              <span><%= article.publishedDate %></span>
+              <% if (article.authorName) { %>
+                <span>oleh <%= article.authorName %></span>
+              <% } %>
+            </div>
+          </header>
+
+          <% if (article.featuredImage) { %>
+            <div class="dv-article-full-image">
+              <img src="<%= article.featuredImage %>" alt="<%= article.title %>">
+            </div>
+          <% } %>
+
+          <div class="dv-article-full-content">
+            <%- article.content %>
+          </div>
+
+          <% if (article.tags && article.tags.length > 0) { %>
+            <div class="dv-article-full-tags">
+              <% article.tags.split(',').forEach(function(tag) { tag = tag.trim(); if (!tag) return; %>
+                <span class="dv-tag">#<%= tag %></span>
+              <% }); %>
+            </div>
+          <% } %>
+        </article>
+
+        <!-- Comments Section -->
+        <% if (comments && comments.length > 0) { %>
+          <section class="dv-comments-section">
+            <h2 class="dv-comments-title"><%= comments.length %> Komentar</h2>
+            <% comments.forEach(function(comment) { %>
+              <div class="dv-comment">
+                <div class="dv-comment-avatar">
+                  <% if (comment.avatarUrl) { %>
+                    <img src="<%= comment.avatarUrl %>" alt="<%= comment.authorName %>">
+                  <% } else { %>
+                    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44'%3E%3Crect width='44' height='44' fill='%23e2e6ec'/%3E%3Ctext x='50%25' y='55%25' text-anchor='middle' fill='%237c8294' font-size='18' font-family='sans-serif' dominant-baseline='middle'%3E<%= comment.authorName.charAt(0).toUpperCase() %>%3C/text%3E%3C/svg%3E" alt="<%= comment.authorName %>">
+                  <% } %>
+                </div>
+                <div class="dv-comment-body">
+                  <div class="dv-comment-header">
+                    <span class="dv-comment-author"><%= comment.authorName %></span>
+                    <span class="dv-comment-date"><%= comment.date %></span>
+                  </div>
+                  <div class="dv-comment-text"><%- comment.content %></div>
+                </div>
+              </div>
+            <% }); %>
+          </section>
+        <% } %>
+
+      </main>
+
+      <!-- Sidebar -->
+      <aside class="dv-sidebar">
+
+        <!-- About Widget -->
+        <div class="dv-widget">
+          <h3 class="dv-widget-title">Tentang</h3>
+          <p class="dv-widget-about-text"><%= siteDescription %></p>
+          <a href="<%= siteUrl %>/about.html" class="dv-widget-about-link">Selengkapnya &rarr;</a>
+        </div>
+
+        <!-- Categories Widget -->
+        <div class="dv-widget dv-widget-categories">
+          <h3 class="dv-widget-title">Kategori</h3>
+          <ul>
+            <% categories.forEach(function(cat) { %>
+              <li>
+                <a href="<%= siteUrl %>/category/<%= cat.slug %>.html">
+                  <%= cat.name %>
+                  <span class="dv-cat-arrow">&rarr;</span>
+                </a>
+              </li>
+            <% }); %>
+          </ul>
+        </div>
+
+        <!-- Recent Posts Widget -->
+        <div class="dv-widget">
+          <h3 class="dv-widget-title">Artikel Terbaru</h3>
+          <div class="dv-widget-recent-item">
+            <div class="dv-widget-recent-info">
+              <a href="<%= siteUrl %>/articles/<%= article.slug %>.html"><%= article.title %></a>
+              <div class="dv-widget-recent-date"><%= article.publishedDate %></div>
+            </div>
+          </div>
+        </div>
+
+      </aside>
+
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="dv-footer">
+    <div class="dv-footer-main">
+      <div>
+        <h4 class="dv-footer-heading"><%= siteName %></h4>
+        <p class="dv-footer-about-text"><%= siteDescription %></p>
+      </div>
+      <div>
+        <h4 class="dv-footer-heading">Kategori</h4>
+        <ul class="dv-footer-links">
+          <% categories.forEach(function(cat) { %>
+            <li><a href="<%= siteUrl %>/category/<%= cat.slug %>.html"><%= cat.name %></a></li>
+          <% }); %>
+        </ul>
+      </div>
+      <div>
+        <h4 class="dv-footer-heading">Tautan Cepat</h4>
+        <ul class="dv-footer-links">
+          <li><a href="<%= siteUrl %>">Beranda</a></li>
+          <li><a href="<%= siteUrl %>/about.html">Tentang</a></li>
+          <li><a href="<%= siteUrl %>/sitemap.xml">Peta Situs</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="dv-footer-bottom">
+      &copy; <%= new Date().getFullYear() %> <%= siteName %>. Hak cipta dilindungi.
+    </div>
+  </footer>
+
+</body>
+</html>

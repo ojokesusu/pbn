@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= article.title %> - <%= siteName %></title>
+    <meta name="description" content="<%= article.excerpt %>">
+    <link rel="canonical" href="<%= siteUrl %>/articles/<%= article.slug %>.html">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=<%= fontFamily.replace(/ /g, '+') %>:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": "<%= article.title.replace(/"/g, '\\"') %>",
+        "description": "<%= article.excerpt.replace(/"/g, '\\"') %>",
+        <% if (article.featuredImage) { %>"image": "<%= article.featuredImage %>",<% } %>
+        "author": {
+            "@type": "Person",
+            "name": "<%= article.authorName.replace(/"/g, '\\"') %>"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "<%= siteName.replace(/"/g, '\\"') %>",
+            "url": "<%= siteUrl %>"
+        },
+        "datePublished": "<%= article.publishedAt %>",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "<%= siteUrl %>/articles/<%= article.slug %>.html"
+        }
+    }
+    </script>
+</head>
+<body class="fl-body fl-body--article">
+
+    <!-- Header -->
+    <header class="fl-header fl-header--<%= headerStyle %>">
+        <div class="fl-header__brand">
+            <a href="<%= siteUrl %>" class="fl-header__logo"><%= siteName %></a>
+            <p class="fl-header__tagline"><%= siteDescription %></p>
+        </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="fl-nav">
+        <div class="fl-nav__inner">
+            <a href="<%= siteUrl %>" class="fl-nav__link">Beranda</a>
+            <% categories.forEach(function(cat) { %>
+            <a href="/category/<%= cat.slug %>.html" class="fl-nav__link<%= cat.slug === article.categorySlug ? ' fl-nav__link--active' : '' %>"><%= cat.name %></a>
+            <% }); %>
+            <a href="/about.html" class="fl-nav__link">Tentang</a>
+        </div>
+    </nav>
+
+    <main class="fl-main">
+
+        <!-- Article Hero Banner -->
+        <div class="fl-article-hero">
+            <% if (article.featuredImage) { %>
+            <img src="<%= article.featuredImage %>" alt="<%= article.title %>" class="fl-article-hero__img" loading="eager">
+            <% } %>
+            <div class="fl-article-hero__overlay">
+                <a href="/category/<%= article.categorySlug %>.html" class="fl-badge fl-badge--hero"><%= article.category %></a>
+                <h1 class="fl-article-hero__title"><%= article.title %></h1>
+                <div class="fl-article-hero__meta">
+                    <span class="fl-article-hero__author">Oleh <%= article.authorName %></span>
+                    <time class="fl-article-hero__date" datetime="<%= article.publishedAt %>"><%= article.publishedDate %></time>
+                </div>
+            </div>
+        </div>
+
+        <!-- Article Body -->
+        <article class="fl-article">
+            <div class="fl-article__content">
+                <%- article.content %>
+            </div>
+
+            <% if (article.tags && article.tags.length > 0) { %>
+            <div class="fl-article__tags">
+                <span class="fl-article__tags-label">Tag:</span>
+                <% article.tags.split(',').forEach(function(tag) { tag = tag.trim(); if (!tag) return; %>
+                <span class="fl-tag"><%= tag %></span>
+                <% }); %>
+            </div>
+            <% } %>
+
+            <div class="fl-article__share">
+                <span class="fl-article__share-label">Bagikan artikel ini:</span>
+                <a href="https://twitter.com/intent/tweet?url=<%= encodeURIComponent(siteUrl + '/articles/' + article.slug + '.html') %>&text=<%= encodeURIComponent(article.title) %>" target="_blank" rel="noopener noreferrer" class="fl-share-btn fl-share-btn--twitter" aria-label="Share on Twitter">Twitter</a>
+                <a href="https://www.facebook.com/sharer/sharer.php?u=<%= encodeURIComponent(siteUrl + '/articles/' + article.slug + '.html') %>" target="_blank" rel="noopener noreferrer" class="fl-share-btn fl-share-btn--facebook" aria-label="Share on Facebook">Facebook</a>
+                <a href="https://www.linkedin.com/sharing/share-offsite/?url=<%= encodeURIComponent(siteUrl + '/articles/' + article.slug + '.html') %>" target="_blank" rel="noopener noreferrer" class="fl-share-btn fl-share-btn--linkedin" aria-label="Share on LinkedIn">LinkedIn</a>
+            </div>
+        </article>
+
+        <!-- Comments Section -->
+        <section class="fl-comments">
+            <h2 class="fl-comments__title">Komentar (<%= comments.length %>)</h2>
+
+            <% if (comments.length === 0) { %>
+            <p class="fl-comments__empty">Belum ada komentar. Jadilah yang pertama berbagi pendapat!</p>
+            <% } %>
+
+            <div class="fl-comments__list">
+                <% comments.forEach(function(comment) { %>
+                <div class="fl-comment">
+                    <div class="fl-comment__avatar">
+                        <% if (comment.avatarUrl) { %>
+                        <img src="<%= comment.avatarUrl %>" alt="<%= comment.authorName %>" class="fl-comment__avatar-img" loading="lazy">
+                        <% } else { %>
+                        <div class="fl-comment__avatar-placeholder"><%= comment.authorName.charAt(0).toUpperCase() %></div>
+                        <% } %>
+                    </div>
+                    <div class="fl-comment__body">
+                        <div class="fl-comment__header">
+                            <span class="fl-comment__author"><%= comment.authorName %></span>
+                            <time class="fl-comment__date"><%= comment.date %></time>
+                        </div>
+                        <div class="fl-comment__content">
+                            <p><%- comment.content %></p>
+                        </div>
+                    </div>
+                </div>
+                <% }); %>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="fl-footer fl-footer--<%= footerStyle %>">
+        <div class="fl-footer__cta">
+            <h3 class="fl-footer__cta-title">Tetap terupdate</h3>
+            <p class="fl-footer__cta-text">Dapatkan artikel terbaru langsung ke inbox Anda. Tanpa spam.</p>
+            <form class="fl-footer__form" onsubmit="return false;">
+                <input type="email" class="fl-footer__input" placeholder="Email Anda" aria-label="Email Anda">
+                <button type="submit" class="fl-footer__btn">Berlangganan</button>
+            </form>
+        </div>
+        <div class="fl-footer__columns">
+            <div class="fl-footer__col">
+                <h4 class="fl-footer__col-title">Kategori</h4>
+                <ul class="fl-footer__list">
+                    <% categories.forEach(function(cat) { %>
+                    <li><a href="/category/<%= cat.slug %>.html" class="fl-footer__link"><%= cat.name %></a></li>
+                    <% }); %>
+                </ul>
+            </div>
+            <div class="fl-footer__col">
+                <h4 class="fl-footer__col-title">Perusahaan</h4>
+                <ul class="fl-footer__list">
+                    <li><a href="/about.html" class="fl-footer__link">Tentang Kami</a></li>
+                    <li><a href="#" class="fl-footer__link">Kontak</a></li>
+                    <li><a href="#" class="fl-footer__link">Karir</a></li>
+                    <li><a href="#" class="fl-footer__link">Iklan</a></li>
+                </ul>
+            </div>
+            <div class="fl-footer__col">
+                <h4 class="fl-footer__col-title">Legal</h4>
+                <ul class="fl-footer__list">
+                    <li><a href="#" class="fl-footer__link">Kebijakan Privasi</a></li>
+                    <li><a href="#" class="fl-footer__link">Syarat Layanan</a></li>
+                    <li><a href="#" class="fl-footer__link">Kebijakan Cookie</a></li>
+                    <li><a href="#" class="fl-footer__link">DMCA</a></li>
+                </ul>
+            </div>
+            <div class="fl-footer__col">
+                <h4 class="fl-footer__col-title"><%= siteName %></h4>
+                <p class="fl-footer__about"><%= siteDescription %></p>
+            </div>
+        </div>
+        <div class="fl-footer__bottom">
+            <p>&copy; <%= new Date().getFullYear() %> <%= siteName %>. Hak cipta dilindungi.</p>
+        </div>
+    </footer>
+
+</body>
+</html>

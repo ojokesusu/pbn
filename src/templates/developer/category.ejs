@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= category.name %> - <%= siteName %></title>
+  <meta name="description" content="<%= category.description || 'Jelajahi semua artikel di ' + category.name + ' pada ' + siteName %>">
+  <link rel="canonical" href="<%= siteUrl %>/category/<%= category.slug %>.html">
+  <link href="https://fonts.googleapis.com/css2?family=<%= fontFamily.replace(/ /g, '+') %>:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header class="dv-topbar">
+    <div class="dv-topbar-inner">
+      <a href="<%= siteUrl %>" class="dv-logo">
+        <span class="dv-logo-icon">&lt;/&gt;</span>
+        <%= siteName %>
+      </a>
+      <button class="dv-hamburger" onclick="document.querySelector('.dv-nav').classList.toggle('dv-nav-open')" aria-label="Toggle navigasi">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="dv-nav">
+        <a href="<%= siteUrl %>">Beranda</a>
+        <% categories.slice(0, 5).forEach(function(cat) { %>
+          <a href="<%= siteUrl %>/category/<%= cat.slug %>.html" <% if (category.slug === cat.slug) { %>class="dv-active"<% } %>><%= cat.name %></a>
+        <% }); %>
+        <a href="<%= siteUrl %>/about.html">Tentang</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Page Header -->
+  <section class="dv-page-header">
+    <div class="dv-container">
+      <div class="dv-breadcrumbs" style="color: #8a90a0; margin-bottom: 0.5rem;">
+        <a href="<%= siteUrl %>" style="color: #8a90a0;">Beranda</a>
+        <span class="dv-bc-sep">/</span>
+        <span style="color: #c4c9d4;"><%= category.name %></span>
+      </div>
+      <h1><%= category.name %></h1>
+      <% if (category.description) { %>
+        <p><%= category.description %></p>
+      <% } %>
+    </div>
+  </section>
+
+  <!-- Main Layout -->
+  <div class="dv-container">
+    <div class="dv-layout">
+
+      <!-- Main Content -->
+      <main class="dv-main">
+        <% if (articles && articles.length > 0) { %>
+          <% articles.forEach(function(article) { %>
+            <article class="dv-article-card">
+              <% if (article.featuredImage) { %>
+                <div class="dv-article-card-img">
+                  <a href="<%= siteUrl %>/articles/<%= article.slug %>.html">
+                    <img src="<%= article.featuredImage %>" alt="<%= article.title %>" loading="lazy">
+                  </a>
+                </div>
+              <% } %>
+              <div class="dv-article-card-body">
+                <div class="dv-article-card-meta">
+                  <a href="<%= siteUrl %>/category/<%= article.categorySlug %>.html" class="dv-article-card-category"><%= article.category %></a>
+                  <span><%= article.publishedDate %></span>
+                  <% if (article.authorName) { %>
+                    <span>oleh <%= article.authorName %></span>
+                  <% } %>
+                </div>
+                <h2 class="dv-article-card-title">
+                  <a href="<%= siteUrl %>/articles/<%= article.slug %>.html"><%= article.title %></a>
+                </h2>
+                <p class="dv-article-card-excerpt"><%= article.excerpt %></p>
+                <a href="<%= siteUrl %>/articles/<%= article.slug %>.html" class="dv-article-card-readmore">
+                  Baca Selengkapnya <span>&rarr;</span>
+                </a>
+              </div>
+            </article>
+          <% }); %>
+        <% } else { %>
+          <div class="dv-empty-state">
+            <h3>Belum Ada Artikel</h3>
+            <p>Belum ada artikel dalam kategori ini. Nantikan konten terbaru dari kami.</p>
+          </div>
+        <% } %>
+      </main>
+
+      <!-- Sidebar -->
+      <aside class="dv-sidebar">
+
+        <!-- About Widget -->
+        <div class="dv-widget">
+          <h3 class="dv-widget-title">Tentang</h3>
+          <p class="dv-widget-about-text"><%= siteDescription %></p>
+          <a href="<%= siteUrl %>/about.html" class="dv-widget-about-link">Selengkapnya &rarr;</a>
+        </div>
+
+        <!-- Categories Widget -->
+        <div class="dv-widget dv-widget-categories">
+          <h3 class="dv-widget-title">Kategori</h3>
+          <ul>
+            <% categories.forEach(function(cat) { %>
+              <li>
+                <a href="<%= siteUrl %>/category/<%= cat.slug %>.html">
+                  <%= cat.name %>
+                  <span class="dv-cat-arrow">&rarr;</span>
+                </a>
+              </li>
+            <% }); %>
+          </ul>
+        </div>
+
+        <!-- Recent Posts Widget -->
+        <% if (articles && articles.length > 0) { %>
+          <div class="dv-widget">
+            <h3 class="dv-widget-title">Artikel Terbaru</h3>
+            <% articles.slice(0, 5).forEach(function(article) { %>
+              <div class="dv-widget-recent-item">
+                <% if (article.featuredImage) { %>
+                  <div class="dv-widget-recent-thumb">
+                    <a href="<%= siteUrl %>/articles/<%= article.slug %>.html">
+                      <img src="<%= article.featuredImage %>" alt="<%= article.title %>" loading="lazy">
+                    </a>
+                  </div>
+                <% } %>
+                <div class="dv-widget-recent-info">
+                  <a href="<%= siteUrl %>/articles/<%= article.slug %>.html"><%= article.title %></a>
+                  <div class="dv-widget-recent-date"><%= article.publishedDate %></div>
+                </div>
+              </div>
+            <% }); %>
+          </div>
+        <% } %>
+
+      </aside>
+
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="dv-footer">
+    <div class="dv-footer-main">
+      <div>
+        <h4 class="dv-footer-heading"><%= siteName %></h4>
+        <p class="dv-footer-about-text"><%= siteDescription %></p>
+      </div>
+      <div>
+        <h4 class="dv-footer-heading">Kategori</h4>
+        <ul class="dv-footer-links">
+          <% categories.forEach(function(cat) { %>
+            <li><a href="<%= siteUrl %>/category/<%= cat.slug %>.html"><%= cat.name %></a></li>
+          <% }); %>
+        </ul>
+      </div>
+      <div>
+        <h4 class="dv-footer-heading">Tautan Cepat</h4>
+        <ul class="dv-footer-links">
+          <li><a href="<%= siteUrl %>">Beranda</a></li>
+          <li><a href="<%= siteUrl %>/about.html">Tentang</a></li>
+          <li><a href="<%= siteUrl %>/sitemap.xml">Peta Situs</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="dv-footer-bottom">
+      &copy; <%= new Date().getFullYear() %> <%= siteName %>. Hak cipta dilindungi.
+    </div>
+  </footer>
+
+</body>
+</html>

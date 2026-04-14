@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= category.name %> - <%= siteName %></title>
+    <meta name="description" content="<%= category.description || 'Jelajahi semua artikel di kategori ' + category.name + ' di ' + siteName %>">
+    <link rel="canonical" href="<%= siteUrl %>/category/<%= category.slug %>.html">
+    <link href="https://fonts.googleapis.com/css2?family=<%= fontFamily.replace(/ /g, '+') %>:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+    <!-- Top Date Strip -->
+    <div class="np-topstrip">
+        <div class="np-container">
+            <div class="np-topstrip-inner">
+                <span class="np-topstrip-date"><%= new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) %></span>
+                <div class="np-topstrip-social">
+                    <span class="np-social-link">Facebook</span>
+                    <span class="np-social-link">Twitter</span>
+                    <span class="np-social-link">Instagram</span>
+                    <span class="np-social-link">RSS</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Site Name Bar -->
+    <header class="np-header">
+        <div class="np-container">
+            <div class="np-header-inner">
+                <% if (headerStyle === 'centered') { %>
+                <div class="np-header-centered">
+                    <h1 class="np-site-title"><a href="<%= siteUrl %>"><%= siteName %></a></h1>
+                    <p class="np-site-tagline"><%= siteDescription %></p>
+                </div>
+                <% } else if (headerStyle === 'minimal') { %>
+                <div class="np-header-minimal">
+                    <h1 class="np-site-title"><a href="<%= siteUrl %>"><%= siteName %></a></h1>
+                </div>
+                <% } else { %>
+                <div class="np-header-left">
+                    <h1 class="np-site-title"><a href="<%= siteUrl %>"><%= siteName %></a></h1>
+                    <p class="np-site-tagline"><%= siteDescription %></p>
+                </div>
+                <% } %>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Bar -->
+    <nav class="np-navbar">
+        <div class="np-container">
+            <button class="np-nav-toggle" aria-label="Toggle navigasi">&#9776; Menu</button>
+            <ul class="np-nav-menu">
+                <li class="np-nav-item"><a href="<%= siteUrl %>" class="np-nav-link">Beranda</a></li>
+                <% categories.forEach(function(cat) { %>
+                <li class="np-nav-item"><a href="/category/<%= cat.slug %>.html" class="np-nav-link<%= category.slug === cat.slug ? ' np-nav-active' : '' %>"><%= cat.name %></a></li>
+                <% }); %>
+                <li class="np-nav-item"><a href="/about.html" class="np-nav-link">Tentang</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Breadcrumb -->
+    <div class="np-breadcrumb-bar">
+        <div class="np-container">
+            <nav class="np-breadcrumb" aria-label="Breadcrumb">
+                <a href="<%= siteUrl %>">Beranda</a>
+                <span class="np-breadcrumb-sep">&rsaquo;</span>
+                <span class="np-breadcrumb-current"><%= category.name %></span>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Category Header -->
+    <div class="np-category-header">
+        <div class="np-container">
+            <h2 class="np-category-page-title"><%= category.name %></h2>
+            <% if (category.description) { %>
+            <p class="np-category-desc"><%= category.description %></p>
+            <% } %>
+            <span class="np-category-article-count"><%= articles.length %> artikel</span>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="np-main">
+        <div class="np-container">
+            <div class="np-content-grid">
+                <!-- Articles Column -->
+                <div class="np-articles-col">
+                    <% if (articles.length > 0) { %>
+                    <div class="np-articles-grid">
+                        <% articles.forEach(function(article) { %>
+                        <article class="np-article-card">
+                            <a href="/articles/<%= article.slug %>.html" class="np-card-link">
+                                <div class="np-card-thumb" style="background-image: url('<%= article.featuredImage || '/assets/placeholder.jpg' %>')"></div>
+                                <div class="np-card-body">
+                                    <span class="np-card-cat"><%= article.category %></span>
+                                    <h3 class="np-card-title"><%= article.title %></h3>
+                                    <p class="np-card-excerpt"><%= article.excerpt %></p>
+                                    <div class="np-card-meta">
+                                        <span class="np-meta-author"><%= article.authorName %></span>
+                                        <span class="np-meta-sep">&bull;</span>
+                                        <time class="np-meta-date" datetime="<%= article.publishedAt %>"><%= article.publishedDate %></time>
+                                    </div>
+                                </div>
+                            </a>
+                        </article>
+                        <% }); %>
+                    </div>
+                    <% } else { %>
+                    <div class="np-no-articles">
+                        <p>Tidak ada artikel dalam kategori ini.</p>
+                        <a href="<%= siteUrl %>" class="np-back-home">Kembali ke Beranda</a>
+                    </div>
+                    <% } %>
+                </div>
+
+                <!-- Sidebar -->
+                <aside class="np-sidebar">
+                    <!-- Categories -->
+                    <div class="np-sidebar-widget">
+                        <h3 class="np-widget-title">Semua Kategori</h3>
+                        <ul class="np-category-list">
+                            <% categories.forEach(function(cat) { %>
+                            <li class="np-category-item<%= category.slug === cat.slug ? ' np-category-active' : '' %>">
+                                <a href="/category/<%= cat.slug %>.html" class="np-category-link">
+                                    <span class="np-category-name"><%= cat.name %></span>
+                                </a>
+                            </li>
+                            <% }); %>
+                        </ul>
+                    </div>
+
+                    <!-- Tags Cloud -->
+                    <div class="np-sidebar-widget">
+                        <h3 class="np-widget-title">Tag</h3>
+                        <div class="np-tags-cloud">
+                            <% var allTags = []; articles.forEach(function(a) { if (a.tags) { a.tags.split(',').forEach(function(t) { t = t.trim(); if (t && allTags.indexOf(t) === -1) allTags.push(t); }); } }); %>
+                            <% allTags.slice(0, 20).forEach(function(tag) { %>
+                            <span class="np-tag-item"><%= tag %></span>
+                            <% }); %>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="np-footer">
+        <div class="np-container">
+            <div class="np-footer-grid">
+                <div class="np-footer-col">
+                    <h4 class="np-footer-heading"><%= siteName %></h4>
+                    <p class="np-footer-about"><%= siteDescription %></p>
+                </div>
+                <div class="np-footer-col">
+                    <h4 class="np-footer-heading">Kategori</h4>
+                    <ul class="np-footer-links">
+                        <% categories.slice(0, 6).forEach(function(cat) { %>
+                        <li><a href="/category/<%= cat.slug %>.html"><%= cat.name %></a></li>
+                        <% }); %>
+                    </ul>
+                </div>
+                <div class="np-footer-col">
+                    <h4 class="np-footer-heading">Tautan Cepat</h4>
+                    <ul class="np-footer-links">
+                        <li><a href="<%= siteUrl %>">Beranda</a></li>
+                        <li><a href="/about.html">Tentang Kami</a></li>
+                        <li><a href="/sitemap.xml">Sitemap</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="np-footer-bottom">
+            <div class="np-container">
+                <p class="np-copyright">&copy; <%= new Date().getFullYear() %> <%= siteName %>. Hak cipta dilindungi.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var toggle = document.querySelector('.np-nav-toggle');
+        var menu = document.querySelector('.np-nav-menu');
+        if (toggle && menu) {
+            toggle.addEventListener('click', function() {
+                menu.classList.toggle('np-nav-open');
+                toggle.classList.toggle('np-toggle-active');
+            });
+        }
+    });
+    </script>
+</body>
+</html>

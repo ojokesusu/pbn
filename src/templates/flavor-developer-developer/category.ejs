@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= category.name %> - <%= siteName %></title>
+    <meta name="description" content="<%= category.description ? category.description : 'Jelajahi semua artikel di kategori ' + category.name + ' di ' + siteName %>">
+    <link rel="canonical" href="<%= siteUrl %>/category/<%= category.slug %>.html">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&family=<%= fontFamily.replace(/ /g, '+') %>:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="cl-body">
+
+    <header class="cl-masthead">
+        <div class="cl-masthead-inner">
+            <h1 class="cl-masthead-title"><a href="<%= siteUrl %>"><%= siteName %></a></h1>
+            <p class="cl-masthead-tagline"><%= siteDescription %></p>
+        </div>
+        <nav class="cl-masthead-nav">
+            <ul class="cl-masthead-nav-list">
+                <li class="cl-masthead-nav-item"><a href="<%= siteUrl %>" class="cl-masthead-nav-link">Beranda</a></li>
+                <% categories.forEach(function(cat) { %>
+                <li class="cl-masthead-nav-item"><a href="/category/<%= cat.slug %>.html" class="cl-masthead-nav-link<%= category.slug === cat.slug ? ' cl-nav-active' : '' %>"><%= cat.name %></a></li>
+                <% }); %>
+                <li class="cl-masthead-nav-item"><a href="/about.html" class="cl-masthead-nav-link">Tentang</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main class="cl-main-content">
+        <div class="cl-container">
+
+            <div class="cl-category-header">
+                <h1 class="cl-category-title"><%= category.name %></h1>
+                <% if (category.description) { %>
+                <p class="cl-category-description"><%= category.description %></p>
+                <% } %>
+                <div class="cl-category-count"><%= articles.length %> artikel dalam kategori ini</div>
+            </div>
+
+            <% if (articles.length === 0) { %>
+            <div class="cl-category-empty">
+                <p>Tidak ada artikel dalam kategori ini. Nantikan konten terbaru dari kami!</p>
+            </div>
+            <% } %>
+
+            <% articles.forEach(function(article) { %>
+            <article class="cl-article-card">
+                <% if (article.featuredImage) { %>
+                <div class="cl-article-card-image">
+                    <a href="/articles/<%= article.slug %>.html">
+                        <img src="<%= article.featuredImage %>" alt="<%= article.title %>" class="cl-article-card-img" loading="lazy">
+                    </a>
+                </div>
+                <% } %>
+                <div class="cl-article-card-body">
+                    <div class="cl-article-card-category">
+                        <a href="/category/<%= article.categorySlug %>.html"><%= article.category %></a>
+                    </div>
+                    <h2 class="cl-article-card-title">
+                        <a href="/articles/<%= article.slug %>.html"><%= article.title %></a>
+                    </h2>
+                    <div class="cl-article-card-meta">
+                        <span class="cl-article-card-author">Oleh <strong><%= article.authorName %></strong></span>
+                        <span class="cl-article-card-sep">&bull;</span>
+                        <time class="cl-article-card-date" datetime="<%= article.publishedAt %>"><%= article.publishedDate %></time>
+                    </div>
+                    <div class="cl-article-card-excerpt">
+                        <p><%- article.excerpt %></p>
+                    </div>
+                    <a href="/articles/<%= article.slug %>.html" class="cl-article-card-readmore">Baca Selengkapnya &rarr;</a>
+                </div>
+            </article>
+            <% }); %>
+
+        </div>
+    </main>
+
+    <footer class="cl-footer">
+        <div class="cl-footer-inner">
+            <div class="cl-footer-col cl-footer-about">
+                <h3 class="cl-footer-heading">Tentang <%= siteName %></h3>
+                <p class="cl-footer-about-text"><%= siteDescription %></p>
+            </div>
+            <div class="cl-footer-col cl-footer-categories">
+                <h3 class="cl-footer-heading">Kategori</h3>
+                <ul class="cl-footer-cat-list">
+                    <% categories.forEach(function(cat) { %>
+                    <li class="cl-footer-cat-item"><a href="/category/<%= cat.slug %>.html" class="cl-footer-cat-link"><%= cat.name %></a></li>
+                    <% }); %>
+                </ul>
+            </div>
+        </div>
+        <div class="cl-footer-bottom">
+            <p class="cl-footer-copy">&copy; <%= new Date().getFullYear() %> <%= siteName %>. Hak cipta dilindungi.</p>
+        </div>
+    </footer>
+
+</body>
+</html>

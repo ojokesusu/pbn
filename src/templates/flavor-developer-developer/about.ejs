@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tentang - <%= siteName %></title>
+    <meta name="description" content="Pelajari lebih lanjut tentang <%= siteName %>. <%= siteDescription %>">
+    <link rel="canonical" href="<%= siteUrl %>/about.html">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&family=<%= fontFamily.replace(/ /g, '+') %>:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="cl-body">
+
+    <header class="cl-masthead">
+        <div class="cl-masthead-inner">
+            <h1 class="cl-masthead-title"><a href="<%= siteUrl %>"><%= siteName %></a></h1>
+            <p class="cl-masthead-tagline"><%= siteDescription %></p>
+        </div>
+        <nav class="cl-masthead-nav">
+            <ul class="cl-masthead-nav-list">
+                <li class="cl-masthead-nav-item"><a href="<%= siteUrl %>" class="cl-masthead-nav-link">Beranda</a></li>
+                <% categories.forEach(function(cat) { %>
+                <li class="cl-masthead-nav-item"><a href="/category/<%= cat.slug %>.html" class="cl-masthead-nav-link"><%= cat.name %></a></li>
+                <% }); %>
+                <li class="cl-masthead-nav-item"><a href="/about.html" class="cl-masthead-nav-link cl-nav-active">Tentang</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main class="cl-main-content">
+        <div class="cl-container">
+
+            <article class="cl-about-page">
+                <header class="cl-about-header">
+                    <h1 class="cl-about-title">Tentang Kami</h1>
+                    <div class="cl-about-divider"></div>
+                </header>
+
+                <div class="cl-about-content">
+                    <section class="cl-about-section">
+                        <h2 class="cl-about-section-title">Siapa Kami</h2>
+                        <p class="cl-about-text">Selamat datang di <strong><%= siteName %></strong>. Kami berdedikasi untuk menghadirkan konten yang mendalam, telah diteliti dengan baik, serta menginformasikan dan menginspirasi. Misi kami berakar pada semangat berbagi pengetahuan dan komitmen terhadap kualitas tulisan.</p>
+                        <p class="cl-about-text"><%= siteDescription %></p>
+                    </section>
+
+                    <section class="cl-about-section">
+                        <h2 class="cl-about-section-title">Misi Kami</h2>
+                        <p class="cl-about-text">Kami percaya bahwa konten yang berkualitas memiliki kekuatan untuk mendidik, melibatkan, dan memberdayakan pembaca. Setiap artikel yang diterbitkan di situs kami melalui proses editorial yang ketat untuk memastikan akurasi, kedalaman, dan keterbacaan. Baik Anda pembaca baru maupun pembaca setia, selalu ada hal baru untuk ditemukan di sini.</p>
+                    </section>
+
+                    <section class="cl-about-section">
+                        <h2 class="cl-about-section-title">Topik Bahasan Kami</h2>
+                        <p class="cl-about-text">Konten kami mencakup berbagai topik yang dikurasi dengan cermat untuk memberikan nilai bagi audiens kami yang beragam. Jelajahi kategori kami untuk menemukan artikel yang sesuai dengan minat Anda:</p>
+                        <ul class="cl-about-category-list">
+                            <% categories.forEach(function(cat) { %>
+                            <li class="cl-about-category-item">
+                                <a href="/category/<%= cat.slug %>.html" class="cl-about-category-link">
+                                    <strong><%= cat.name %></strong>
+                                    <% if (cat.description) { %>
+                                    <span class="cl-about-category-desc"> &mdash; <%= cat.description %></span>
+                                    <% } %>
+                                </a>
+                            </li>
+                            <% }); %>
+                        </ul>
+                    </section>
+
+                    <section class="cl-about-section">
+                        <h2 class="cl-about-section-title">Hubungi Kami</h2>
+                        <p class="cl-about-text">Kami menghargai pembaca kami dan menyambut masukan, saran, serta peluang kerja sama. Jika Anda memiliki ide cerita, koreksi, atau sekadar ingin menyapa, jangan ragu untuk menghubungi kami. Bersama-sama, kita dapat terus membangun komunitas yang berpusat pada konten berkualitas.</p>
+                    </section>
+                </div>
+            </article>
+
+        </div>
+    </main>
+
+    <footer class="cl-footer">
+        <div class="cl-footer-inner">
+            <div class="cl-footer-col cl-footer-about">
+                <h3 class="cl-footer-heading">Tentang <%= siteName %></h3>
+                <p class="cl-footer-about-text"><%= siteDescription %></p>
+            </div>
+            <div class="cl-footer-col cl-footer-categories">
+                <h3 class="cl-footer-heading">Kategori</h3>
+                <ul class="cl-footer-cat-list">
+                    <% categories.forEach(function(cat) { %>
+                    <li class="cl-footer-cat-item"><a href="/category/<%= cat.slug %>.html" class="cl-footer-cat-link"><%= cat.name %></a></li>
+                    <% }); %>
+                </ul>
+            </div>
+        </div>
+        <div class="cl-footer-bottom">
+            <p class="cl-footer-copy">&copy; <%= new Date().getFullYear() %> <%= siteName %>. Hak cipta dilindungi.</p>
+        </div>
+    </footer>
+
+</body>
+</html>

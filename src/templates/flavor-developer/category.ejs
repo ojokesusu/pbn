@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= category.name %> - <%= siteName %></title>
+    <meta name="description" content="<%= category.description || 'Jelajahi artikel di kategori ' + category.name %>">
+    <link rel="canonical" href="<%= siteUrl %>/category/<%= category.slug %>.html">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=<%= fontFamily.replace(/ /g, '+') %>:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="mn-body">
+    <header class="mn-header">
+        <div class="mn-header-inner">
+            <a href="<%= siteUrl %>" class="mn-site-name"><%= siteName %></a>
+            <nav class="mn-nav">
+                <a href="/" class="mn-nav-link">Beranda</a>
+                <% categories.forEach(function(cat) { %>
+                <a href="/category/<%= cat.slug %>.html" class="mn-nav-link<%= cat.slug === category.slug ? ' mn-nav-active' : '' %>"><%= cat.name %></a>
+                <% }); %>
+                <a href="/about.html" class="mn-nav-link">Tentang</a>
+            </nav>
+            <button class="mn-menu-toggle" aria-label="Toggle navigasi">
+                <span class="mn-menu-bar"></span>
+                <span class="mn-menu-bar"></span>
+            </button>
+        </div>
+    </header>
+
+    <main class="mn-main">
+        <div class="mn-container">
+            <header class="mn-category-header">
+                <h1 class="mn-category-title"><%= category.name %></h1>
+                <% if (category.description) { %>
+                <p class="mn-category-desc"><%= category.description %></p>
+                <% } %>
+            </header>
+
+            <section class="mn-article-list">
+                <% if (articles.length === 0) { %>
+                <p class="mn-empty-state">Tidak ada artikel dalam kategori ini.</p>
+                <% } %>
+                <% articles.forEach(function(article, index) { %>
+                <article class="mn-list-item">
+                    <h2 class="mn-list-title">
+                        <a href="/articles/<%= article.slug %>.html"><%= article.title %></a>
+                    </h2>
+                    <p class="mn-list-excerpt"><%= article.excerpt %></p>
+                    <div class="mn-list-meta">
+                        <span class="mn-meta-author"><%= article.authorName %></span>
+                        <span class="mn-meta-sep">&middot;</span>
+                        <time class="mn-meta-date" datetime="<%= article.publishedAt %>"><%= article.publishedDate %></time>
+                    </div>
+                </article>
+                <% if (index < articles.length - 1) { %>
+                <hr class="mn-divider">
+                <% } %>
+                <% }); %>
+            </section>
+        </div>
+    </main>
+
+    <footer class="mn-footer">
+        <div class="mn-container">
+            <p class="mn-copyright">&copy; <%= new Date().getFullYear() %> <%= siteName %></p>
+        </div>
+    </footer>
+
+    <script>
+    (function() {
+        var toggle = document.querySelector('.mn-menu-toggle');
+        var nav = document.querySelector('.mn-nav');
+        if (toggle && nav) {
+            toggle.addEventListener('click', function() {
+                nav.classList.toggle('mn-nav-open');
+                toggle.classList.toggle('mn-menu-active');
+            });
+        }
+    })();
+    </script>
+</body>
+</html>

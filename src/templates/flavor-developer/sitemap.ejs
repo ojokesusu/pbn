@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemapschemas.org/sitemap/0.9">
+  <url><loc><%= siteUrl %></loc><priority>1.0</priority></url>
+  <% articles.forEach(function(article) { %>
+  <url><loc><%= siteUrl %>/articles/<%= article.slug %>.html</loc><lastmod><%= article.publishedAt %></lastmod><priority>0.8</priority></url>
+  <% }); %>
+  <% categories.forEach(function(cat) { %>
+  <url><loc><%= siteUrl %>/category/<%= cat.slug %>.html</loc><priority>0.6</priority></url>
+  <% }); %>
+</urlset>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= article.title %> — <%= siteName %></title>
+  <meta name="description" content="<%= article.excerpt %>">
+  <link rel="canonical" href="<%= siteUrl %>/articles/<%= article.slug %>.html">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=<%= encodeURIComponent(fontFamily).replace(/%20/g,'+') %>:wght@400;500;600;700&family=<%= encodeURIComponent(headingFont).replace(/%20/g,'+') %>:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <style><%- generatedCss %></style>
+</head>
+<body class="{{PREFIX}}-body">
+
+  <div class="{{PREFIX}}-topbar">
+    <div class="{{PREFIX}}-container">
+      <div class="{{PREFIX}}-topbar-inner">
+        <span class="{{PREFIX}}-topbar-date"><%= new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) %></span>
+        <span class="{{PREFIX}}-topbar-tagline">Berita Terkini & Terpercaya</span>
+      </div>
+    </div>
+  </div>
+
+  <header class="{{PREFIX}}-header">
+    <div class="{{PREFIX}}-container">
+      <div class="{{PREFIX}}-header-inner">
+        <a href="<%= siteUrl %>" class="{{PREFIX}}-brand">
+          <span class="{{PREFIX}}-brand-text"><%= siteName %></span>
+        </a>
+        <div class="{{PREFIX}}-header-meta">
+          <span class="{{PREFIX}}-tagline"><%= siteDescription %></span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="{{PREFIX}}-nav">
+    <div class="{{PREFIX}}-container">
+      <div class="{{PREFIX}}-nav-inner">
+        <a href="<%= siteUrl %>" class="{{PREFIX}}-nav-link">Beranda</a>
+        <% (categories || []).slice(0, 6).forEach(function(cat) { %>
+          <a href="<%= siteUrl %>/category/<%= cat.slug %>.html" class="{{PREFIX}}-nav-link"><%= cat.name %></a>
+        <% }); %>
+        <a href="<%= siteUrl %>/about.html" class="{{PREFIX}}-nav-link">Tentang</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="{{PREFIX}}-main">
+    <div class="{{PREFIX}}-container">
+
+      <!-- Breadcrumb -->
+      <div class="{{PREFIX}}-breadcrumb">
+        <a href="<%= siteUrl %>">Beranda</a>
+        <% if (article.category) { %>
+          <span class="{{PREFIX}}-meta-sep">›</span>
+          <a href="<%= siteUrl %>/category/<%= article.categorySlug %>.html"><%= article.category %></a>
+        <% } %>
+        <span class="{{PREFIX}}-meta-sep">›</span>
+        <span><%= article.title.length > 50 ? article.title.substring(0,50) + '...' : article.title %></span>
+      </div>
+
+      <article class="{{PREFIX}}-article">
+        <header class="{{PREFIX}}-article-header">
+          <% if (article.category) { %>
+            <a href="<%= siteUrl %>/category/<%= article.categorySlug %>.html" class="{{PREFIX}}-badge"><%= article.category %></a>
+          <% } %>
+          <h1 class="{{PREFIX}}-article-title"><%= article.title %></h1>
+          <p class="{{PREFIX}}-article-excerpt"><%= article.excerpt %></p>
+          <div class="{{PREFIX}}-article-meta">
+            <div class="{{PREFIX}}-author">
+              <div class="{{PREFIX}}-author-avatar"><%= article.authorName.charAt(0) %></div>
+              <div class="{{PREFIX}}-author-info">
+                <span class="{{PREFIX}}-author-name"><%= article.authorName %></span>
+                <span class="{{PREFIX}}-author-date"><%= article.publishedAt %></span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <% if (article.featuredImage) { %>
+          <div class="{{PREFIX}}-article-hero">
+            <img src="<%= article.featuredImage %>" alt="<%= article.title %>">
+          </div>
+        <% } %>
+
+        <div class="{{PREFIX}}-article-body">
+          <%- article.content %>
+        </div>
+
+        <% if (article.tags) { %>
+          <div class="{{PREFIX}}-tags">
+            <span class="{{PREFIX}}-tags-label">Tags:</span>
+            <% article.tags.split(',').forEach(function(tag) { %>
+              <span class="{{PREFIX}}-tag"><%= tag.trim() %></span>
+            <% }); %>
+          </div>
+        <% } %>
+      </article>
+
+      <% if (comments && comments.length > 0) { %>
+        <section class="{{PREFIX}}-comments">
+          <h3 class="{{PREFIX}}-comments-title">Komentar (<%= comments.length %>)</h3>
+          <% comments.forEach(function(comment) { %>
+            <div class="{{PREFIX}}-comment">
+              <div class="{{PREFIX}}-comment-avatar"><%= comment.authorName.charAt(0) %></div>
+              <div class="{{PREFIX}}-comment-body">
+                <div class="{{PREFIX}}-comment-header">
+                  <span class="{{PREFIX}}-comment-author"><%= comment.authorName %></span>
+                  <span class="{{PREFIX}}-comment-date"><%= comment.date %></span>
+                </div>
+                <p class="{{PREFIX}}-comment-text"><%= comment.content %></p>
+              </div>
+            </div>
+          <% }); %>
+        </section>
+      <% } %>
+
+    </div>
+  </main>
+
+  <footer class="{{PREFIX}}-footer">
+    <div class="{{PREFIX}}-container">
+      <div class="{{PREFIX}}-footer-inner">
+        <div class="{{PREFIX}}-footer-col">
+          <h4 class="{{PREFIX}}-footer-title"><%= siteName %></h4>
+          <p class="{{PREFIX}}-footer-desc"><%= siteDescription %></p>
+        </div>
+        <div class="{{PREFIX}}-footer-col">
+          <h4 class="{{PREFIX}}-footer-title">Kategori</h4>
+          <ul class="{{PREFIX}}-footer-list">
+            <% (categories || []).slice(0, 6).forEach(function(cat) { %>
+              <li><a href="<%= siteUrl %>/category/<%= cat.slug %>.html"><%= cat.name %></a></li>
+            <% }); %>
+          </ul>
+        </div>
+        <div class="{{PREFIX}}-footer-col">
+          <h4 class="{{PREFIX}}-footer-title">Tautan</h4>
+          <ul class="{{PREFIX}}-footer-list">
+            <li><a href="<%= siteUrl %>">Beranda</a></li>
+            <li><a href="<%= siteUrl %>/about.html">Tentang Kami</a></li>
+            <li><a href="<%= siteUrl %>/feed.xml">RSS Feed</a></li>
+          </ul>
+        </div>
+        <% if (pbnLinks && pbnLinks.length > 0) { %>
+        <div class="{{PREFIX}}-footer-col">
+          <h4 class="{{PREFIX}}-footer-title">Rekomendasi</h4>
+          <ul class="{{PREFIX}}-footer-list">
+            <% pbnLinks.slice(0, 3).forEach(function(link) { %>
+              <li><a href="<%= link.url %>" target="_blank" rel="noopener"><%= link.name %></a></li>
+            <% }); %>
+          </ul>
+        </div>
+        <% } %>
+      </div>
+      <div class="{{PREFIX}}-footer-bottom">
+        <span>&copy; <%= new Date().getFullYear() %> <%= siteName %>. Hak Cipta Dilindungi.</span>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

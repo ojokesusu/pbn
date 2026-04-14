@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= article.title %> - <%= siteName %></title>
+    <meta name="description" content="<%= article.excerpt %>">
+    <link rel="canonical" href="<%= siteUrl %>/articles/<%= article.slug %>.html">
+    <link href="https://fonts.googleapis.com/css2?family=<%= fontFamily.replace(/ /g, '+') %>:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "NewsArticle",
+        "headline": "<%= article.title.replace(/"/g, '\\"') %>",
+        "description": "<%= article.excerpt.replace(/"/g, '\\"') %>",
+        "image": "<%= article.featuredImage || '' %>",
+        "author": {
+            "@type": "Person",
+            "name": "<%= article.authorName.replace(/"/g, '\\"') %>"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "<%= siteName.replace(/"/g, '\\"') %>",
+            "url": "<%= siteUrl %>"
+        },
+        "datePublished": "<%= article.publishedAt %>",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "<%= siteUrl %>/articles/<%= article.slug %>.html"
+        }
+    }
+    </script>
+</head>
+<body>
+    <!-- Top Date Strip -->
+    <div class="np-topstrip">
+        <div class="np-container">
+            <div class="np-topstrip-inner">
+                <span class="np-topstrip-date"><%= new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) %></span>
+                <div class="np-topstrip-social">
+                    <span class="np-social-link">Facebook</span>
+                    <span class="np-social-link">Twitter</span>
+                    <span class="np-social-link">Instagram</span>
+                    <span class="np-social-link">RSS</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Site Name Bar -->
+    <header class="np-header">
+        <div class="np-container">
+            <div class="np-header-inner">
+                <% if (headerStyle === 'centered') { %>
+                <div class="np-header-centered">
+                    <h1 class="np-site-title"><a href="<%= siteUrl %>"><%= siteName %></a></h1>
+                    <p class="np-site-tagline"><%= siteDescription %></p>
+                </div>
+                <% } else if (headerStyle === 'minimal') { %>
+                <div class="np-header-minimal">
+                    <h1 class="np-site-title"><a href="<%= siteUrl %>"><%= siteName %></a></h1>
+                </div>
+                <% } else { %>
+                <div class="np-header-left">
+                    <h1 class="np-site-title"><a href="<%= siteUrl %>"><%= siteName %></a></h1>
+                    <p class="np-site-tagline"><%= siteDescription %></p>
+                </div>
+                <% } %>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Bar -->
+    <nav class="np-navbar">
+        <div class="np-container">
+            <button class="np-nav-toggle" aria-label="Toggle navigasi">&#9776; Menu</button>
+            <ul class="np-nav-menu">
+                <li class="np-nav-item"><a href="<%= siteUrl %>" class="np-nav-link">Beranda</a></li>
+                <% categories.forEach(function(cat) { %>
+                <li class="np-nav-item"><a href="/category/<%= cat.slug %>.html" class="np-nav-link<%= article.categorySlug === cat.slug ? ' np-nav-active' : '' %>"><%= cat.name %></a></li>
+                <% }); %>
+                <li class="np-nav-item"><a href="/about.html" class="np-nav-link">Tentang</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Breadcrumb -->
+    <div class="np-breadcrumb-bar">
+        <div class="np-container">
+            <nav class="np-breadcrumb" aria-label="Breadcrumb">
+                <a href="<%= siteUrl %>">Beranda</a>
+                <span class="np-breadcrumb-sep">&rsaquo;</span>
+                <a href="/category/<%= article.categorySlug %>.html"><%= article.category %></a>
+                <span class="np-breadcrumb-sep">&rsaquo;</span>
+                <span class="np-breadcrumb-current"><%= article.title %></span>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Article Content -->
+    <main class="np-main">
+        <div class="np-container">
+            <div class="np-content-grid">
+                <!-- Article Column -->
+                <div class="np-articles-col">
+                    <article class="np-single-article">
+                        <!-- Article Header -->
+                        <header class="np-article-header">
+                            <span class="np-article-cat-label"><%= article.category %></span>
+                            <h1 class="np-article-title"><%= article.title %></h1>
+                            <div class="np-article-meta-bar">
+                                <span class="np-article-author">Oleh <strong><%= article.authorName %></strong></span>
+                                <span class="np-meta-sep">&bull;</span>
+                                <time class="np-article-date" datetime="<%= article.publishedAt %>"><%= article.publishedDate %></time>
+                            </div>
+                        </header>
+
+                        <!-- Featured Image -->
+                        <% if (article.featuredImage) { %>
+                        <div class="np-article-hero">
+                            <img src="<%= article.featuredImage %>" alt="<%= article.title %>" class="np-article-hero-img" loading="lazy">
+                        </div>
+                        <% } %>
+
+                        <!-- Article Body -->
+                        <div class="np-article-body">
+                            <%- article.content %>
+                        </div>
+
+                        <!-- Tags -->
+                        <% if (article.tags && article.tags.length > 0) { %>
+                        <div class="np-article-tags">
+                            <span class="np-tags-label">Tag:</span>
+                            <% article.tags.split(',').forEach(function(tag) { tag = tag.trim(); if (!tag) return; %>
+                            <span class="np-tag-item"><%= tag %></span>
+                            <% }); %>
+                        </div>
+                        <% } %>
+
+                        <!-- Author Box -->
+                        <div class="np-author-box">
+                            <div class="np-author-avatar">
+                                <span class="np-author-initial"><%= article.authorName.charAt(0).toUpperCase() %></span>
+                            </div>
+                            <div class="np-author-info">
+                                <h4 class="np-author-name"><%= article.authorName %></h4>
+                                <p class="np-author-bio">Penulis kontributor di <%= siteName %>.</p>
+                            </div>
+                        </div>
+
+                        <!-- Comments Section -->
+                        <section class="np-comments-section" id="comments">
+                            <h3 class="np-comments-title">Komentar (<%= comments ? comments.length : 0 %>)</h3>
+
+                            <% if (comments && comments.length > 0) { %>
+                            <div class="np-comments-list">
+                                <% comments.forEach(function(comment) { %>
+                                <div class="np-comment">
+                                    <div class="np-comment-avatar">
+                                        <% if (comment.avatarUrl) { %>
+                                        <img src="<%= comment.avatarUrl %>" alt="<%= comment.authorName %>" class="np-comment-avatar-img">
+                                        <% } else { %>
+                                        <span class="np-comment-initial"><%= comment.authorName.charAt(0).toUpperCase() %></span>
+                                        <% } %>
+                                    </div>
+                                    <div class="np-comment-body">
+                                        <div class="np-comment-header">
+                                            <strong class="np-comment-author"><%= comment.authorName %></strong>
+                                            <time class="np-comment-date"><%= comment.date %></time>
+                                        </div>
+                                        <div class="np-comment-text">
+                                            <p><%- comment.content %></p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <% }); %>
+                            </div>
+                            <% } else { %>
+                            <p class="np-no-comments">Belum ada komentar. Jadilah yang pertama membagikan pendapat Anda!</p>
+                            <% } %>
+                        </section>
+                    </article>
+                </div>
+
+                <!-- Sidebar -->
+                <aside class="np-sidebar">
+                    <!-- Categories -->
+                    <div class="np-sidebar-widget">
+                        <h3 class="np-widget-title">Kategori</h3>
+                        <ul class="np-category-list">
+                            <% categories.forEach(function(cat) { %>
+                            <li class="np-category-item">
+                                <a href="/category/<%= cat.slug %>.html" class="np-category-link">
+                                    <span class="np-category-name"><%= cat.name %></span>
+                                </a>
+                            </li>
+                            <% }); %>
+                        </ul>
+                    </div>
+
+                    <!-- Tags Cloud -->
+                    <% if (article.tags && article.tags.length > 0) { %>
+                    <div class="np-sidebar-widget">
+                        <h3 class="np-widget-title">Tag Artikel</h3>
+                        <div class="np-tags-cloud">
+                            <% article.tags.split(',').forEach(function(tag) { tag = tag.trim(); if (!tag) return; %>
+                            <span class="np-tag-item"><%= tag %></span>
+                            <% }); %>
+                        </div>
+                    </div>
+                    <% } %>
+                </aside>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="np-footer">
+        <div class="np-container">
+            <div class="np-footer-grid">
+                <div class="np-footer-col">
+                    <h4 class="np-footer-heading"><%= siteName %></h4>
+                    <p class="np-footer-about"><%= siteDescription %></p>
+                </div>
+                <div class="np-footer-col">
+                    <h4 class="np-footer-heading">Kategori</h4>
+                    <ul class="np-footer-links">
+                        <% categories.slice(0, 6).forEach(function(cat) { %>
+                        <li><a href="/category/<%= cat.slug %>.html"><%= cat.name %></a></li>
+                        <% }); %>
+                    </ul>
+                </div>
+                <div class="np-footer-col">
+                    <h4 class="np-footer-heading">Tautan Cepat</h4>
+                    <ul class="np-footer-links">
+                        <li><a href="<%= siteUrl %>">Beranda</a></li>
+                        <li><a href="/about.html">Tentang Kami</a></li>
+                        <li><a href="/sitemap.xml">Sitemap</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="np-footer-bottom">
+            <div class="np-container">
+                <p class="np-copyright">&copy; <%= new Date().getFullYear() %> <%= siteName %>. Hak cipta dilindungi.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var toggle = document.querySelector('.np-nav-toggle');
+        var menu = document.querySelector('.np-nav-menu');
+        if (toggle && menu) {
+            toggle.addEventListener('click', function() {
+                menu.classList.toggle('np-nav-open');
+                toggle.classList.toggle('np-toggle-active');
+            });
+        }
+    });
+    </script>
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= article.title %> - <%= siteName %></title>
+    <meta name="description" content="<%= article.excerpt ? article.excerpt.replace(/<[^>]*>/g, '').substring(0, 160) : siteDescription %>">
+    <link rel="canonical" href="<%= siteUrl %>/articles/<%= article.slug %>.html">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&family=<%= fontFamily.replace(/ /g, '+') %>:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": "<%= article.title %>",
+        "author": {
+            "@type": "Person",
+            "name": "<%= article.authorName %>"
+        },
+        "datePublished": "<%= article.publishedAt %>",
+        "image": "<%= article.featuredImage ? article.featuredImage : '' %>",
+        "publisher": {
+            "@type": "Organization",
+            "name": "<%= siteName %>",
+            "url": "<%= siteUrl %>"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "<%= siteUrl %>/articles/<%= article.slug %>.html"
+        },
+        "description": "<%= article.excerpt ? article.excerpt.replace(/<[^>]*>/g, '').substring(0, 200) : '' %>"
+    }
+    </script>
+</head>
+<body class="cl-body cl-body-article">
+
+    <header class="cl-masthead">
+        <div class="cl-masthead-inner">
+            <h1 class="cl-masthead-title"><a href="<%= siteUrl %>"><%= siteName %></a></h1>
+            <p class="cl-masthead-tagline"><%= siteDescription %></p>
+        </div>
+        <nav class="cl-masthead-nav">
+            <ul class="cl-masthead-nav-list">
+                <li class="cl-masthead-nav-item"><a href="<%= siteUrl %>" class="cl-masthead-nav-link">Beranda</a></li>
+                <% categories.forEach(function(cat) { %>
+                <li class="cl-masthead-nav-item"><a href="/category/<%= cat.slug %>.html" class="cl-masthead-nav-link<%= article.categorySlug === cat.slug ? ' cl-nav-active' : '' %>"><%= cat.name %></a></li>
+                <% }); %>
+                <li class="cl-masthead-nav-item"><a href="/about.html" class="cl-masthead-nav-link">Tentang</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main class="cl-main-content">
+        <div class="cl-container">
+
+            <article class="cl-single-article">
+                <div class="cl-single-article-header">
+                    <div class="cl-single-article-category">
+                        <a href="/category/<%= article.categorySlug %>.html"><%= article.category %></a>
+                    </div>
+                    <h1 class="cl-single-article-title"><%= article.title %></h1>
+                    <div class="cl-single-article-meta">
+                        <span class="cl-single-article-author">Oleh <strong><%= article.authorName %></strong></span>
+                        <span class="cl-single-article-sep">&bull;</span>
+                        <time class="cl-single-article-date" datetime="<%= article.publishedAt %>"><%= article.publishedDate %></time>
+                    </div>
+                </div>
+
+                <% if (article.featuredImage) { %>
+                <div class="cl-single-article-featured">
+                    <img src="<%= article.featuredImage %>" alt="<%= article.title %>" class="cl-single-article-featured-img">
+                </div>
+                <% } %>
+
+                <div class="cl-single-article-content">
+                    <%- article.content %>
+                </div>
+
+                <% if (article.tags && article.tags.length > 0) { %>
+                <div class="cl-single-article-tags">
+                    <span class="cl-single-article-tags-label">Tag:</span>
+                    <% article.tags.split(',').forEach(function(tag) { tag = tag.trim(); if (!tag) return; %>
+                    <span class="cl-single-article-tag"><%= tag %></span>
+                    <% }); %>
+                </div>
+                <% } %>
+            </article>
+
+            <section class="cl-comments-section">
+                <h2 class="cl-comments-heading">Komentar (<%= comments.length %>)</h2>
+
+                <% if (comments.length === 0) { %>
+                <p class="cl-comments-none">Belum ada komentar. Jadilah yang pertama membagikan pendapat Anda!</p>
+                <% } %>
+
+                <div class="cl-comments-list">
+                    <% comments.forEach(function(comment) { %>
+                    <div class="cl-comment">
+                        <div class="cl-comment-avatar">
+                            <% if (comment.avatarUrl) { %>
+                            <img src="<%= comment.avatarUrl %>" alt="<%= comment.authorName %>" class="cl-comment-avatar-img">
+                            <% } else { %>
+                            <div class="cl-comment-avatar-placeholder"><%= comment.authorName.charAt(0).toUpperCase() %></div>
+                            <% } %>
+                        </div>
+                        <div class="cl-comment-body">
+                            <div class="cl-comment-meta">
+                                <strong class="cl-comment-author"><%= comment.authorName %></strong>
+                                <time class="cl-comment-date"><%= comment.date %></time>
+                            </div>
+                            <div class="cl-comment-content">
+                                <p><%- comment.content %></p>
+                            </div>
+                        </div>
+                    </div>
+                    <% }); %>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <footer class="cl-footer">
+        <div class="cl-footer-inner">
+            <div class="cl-footer-col cl-footer-about">
+                <h3 class="cl-footer-heading">Tentang <%= siteName %></h3>
+                <p class="cl-footer-about-text"><%= siteDescription %></p>
+            </div>
+            <div class="cl-footer-col cl-footer-categories">
+                <h3 class="cl-footer-heading">Kategori</h3>
+                <ul class="cl-footer-cat-list">
+                    <% categories.forEach(function(cat) { %>
+                    <li class="cl-footer-cat-item"><a href="/category/<%= cat.slug %>.html" class="cl-footer-cat-link"><%= cat.name %></a></li>
+                    <% }); %>
+                </ul>
+            </div>
+        </div>
+        <div class="cl-footer-bottom">
+            <p class="cl-footer-copy">&copy; <%= new Date().getFullYear() %> <%= siteName %>. Hak cipta dilindungi.</p>
+        </div>
+    </footer>
+
+</body>
+</html>

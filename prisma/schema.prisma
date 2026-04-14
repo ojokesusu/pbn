@@ -1,0 +1,298 @@
+generator client {
+  provider        = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Server {
+  id              String   @id @default(cuid())
+  name            String                    // primary nameserver, e.g. ns1.example.com
+  nameserver2     String   @default("")     // secondary nameserver, e.g. ns2.example.com
+  host            String                    // server IP
+  username        String
+  password        String
+  port            Int      @default(21)
+  status          String   @default("active") // active, inactive, error
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  domains         Domain[]
+}
+
+model Domain {
+  id              String   @id @default(cuid())
+  name            String
+  url             String   @unique
+  serverId        String?
+  genre           String   @default("") // Teknologi, Kesehatan, Keuangan, etc.
+  status          String   @default("active") // active, inactive, error
+  themeId         String?
+  lastDeployed    DateTime?
+  // ── Health check fields ──
+  isAlive         Boolean  @default(false)  // domain responds to HTTP
+  httpStatus      Int      @default(0)      // last HTTP status code (200, 404, 500, 0=unreachable)
+  hasWordPress    Boolean  @default(false)  // WordPress REST API detected
+  wpPostCount     Int      @default(0)      // number of posts found via WP REST API
+  lastChecked     DateTime?                 // last health check timestamp
+  // ── Index monitoring fields ──
+  indexStatus     String   @default("unchecked") // unchecked, indexed, not-indexed
+  lastIndexCheck  DateTime?                      // last time someone checked
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  server          Server?     @relation(fields: [serverId], references: [id])
+  theme           Theme?      @relation(fields: [themeId], references: [id])
+  articles        Article[]
+  categories      Category[]
+  deployLogs      DeployLog[]
+  backlinkPlacements BacklinkPlacement[]
+  schedulerJobs   SchedulerJob[]
+  domainSchedule  DomainSchedule?
+}
+
+model Theme {
+  id              String   @id @default(cuid())
+  name            String
+  templateName    String   @default("developer") // developer, flavor, flavor-developer, flavor-developer-developer, developer-developer
+  primaryColor    String   @default("#2563eb")
+  secondaryColor  String   @default("#1e40af")
+  accentColor     String   @default("#f59e0b")
+  bgColor         String   @default("#ffffff")
+  textColor       String   @default("#111827")
+  fontFamily      String   @default("Inter")
+  headerStyle     String   @default("centered") // centered, left-aligned, minimal
+  footerStyle     String   @default("simple")   // simple, detailed, minimal
+  customCss       String   @default("")
+  layoutName      String   @default("single-column")
+  cssPrefix       String   @default("")
+  headingFont     String   @default("Inter")
+  borderRadius    String   @default("8px")
+  shadowStyle     String   @default("0 1px 3px rgba(0,0,0,0.1)")
+  spacingScale    String   @default("1")
+  containerWidth  String   @default("1100px")
+  generatedCss    String   @default("")
+  isGenerated     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  domains         Domain[]
+}
+
+model Category {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String
+  description     String   @default("")
+  domainId        String
+
+  domain          Domain    @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  articles        Article[]
+
+  @@unique([domainId, slug])
+}
+
+model Article {
+  id              String   @id @default(cuid())
+  title           String
+  slug            String
+  content         String
+  excerpt         String   @default("")
+  categoryId      String?
+  tags            String   @default("") // comma-separated
+  authorName      String   @default("Admin")
+  featuredImage   String   @default("")
+  status          String   @default("draft") // draft, published
+  aiSourceUrl     String   @default("")
+  domainId        String
+  publishedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  domain          Domain    @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  category        Category? @relation(fields: [categoryId], references: [id])
+  comments        Comment[]
+  backlinkPlacements BacklinkPlacement[]
+
+  @@unique([domainId, slug])
+}
+
+model Comment {
+  id              String   @id @default(cuid())
+  authorName      String
+  content         String
+  avatarUrl       String   @default("")
+  articleId       String
+  createdAt       DateTime @default(now())
+
+  article         Article   @relation(fields: [articleId], references: [id], onDelete: Cascade)
+}
+
+model DeployLog {
+  id              String   @id @default(cuid())
+  domainId        String
+  action          String   // deploy, redeploy, theme-update
+  status          String   // success, failed, in-progress
+  filesChanged    Int      @default(0)
+  message         String   @default("")
+  deployedAt      DateTime @default(now())
+
+  domain          Domain    @relation(fields: [domainId], references: [id], onDelete: Cascade)
+}
+
+model Backlink {
+  id          String   @id @default(cuid())
+  anchorText  String   @default("") // optional — if empty, system picks random word from article
+  targetUrl   String
+  type        String   @default("") // MS, MS 2, LP, CN, RTP — label for filtering
+  status      String   @default("active") // active, inactive
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  placements  BacklinkPlacement[]
+}
+
+model BacklinkPlacement {
+  id            String   @id @default(cuid())
+  backlinkId    String
+  articleId     String
+  domainId      String
+  usedAnchor    String   @default("") // the actual anchor text used in this article
+  createdAt     DateTime @default(now())
+
+  backlink      Backlink @relation(fields: [backlinkId], references: [id], onDelete: Cascade)
+  article       Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  domain        Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@unique([backlinkId, articleId])
+}
+
+model BacklinkConfig {
+  id              String   @id @default(cuid())
+  maxPerDomain    Int      @default(3)    // max backlinks per domain (1-3)
+  maxPerArticle   Int      @default(1)    // max backlinks per article
+  percentArticles Int      @default(30)   // % of articles that get backlinks (20-30)
+  maxPerDay       Int      @default(15)   // max backlinks to distribute per day (anti-spam)
+  updatedAt       DateTime @updatedAt
+}
+
+model AiConfig {
+  id              String   @id @default(cuid())
+  provider        String   // claude, openai
+  apiKey          String
+  model           String
+  temperature     Float    @default(0.7)
+  contentPattern  String   @default("") // JSON string of content generation patterns
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ── Automation Scheduler ──
+
+model SchedulerConfig {
+  id                  String   @id @default(cuid())
+  isRunning           Boolean  @default(false)
+  articlesPerWeek     Int      @default(4)    // articles to generate per domain per week
+  timeWindowStart     Int      @default(6)    // earliest hour (6 = 6:00 AM)
+  timeWindowEnd       Int      @default(23)   // latest hour (23 = 11:00 PM)
+  autoDeploy          Boolean  @default(true) // auto-deploy after generating
+  autoPurgeCache      Boolean  @default(true) // auto-purge Cloudflare cache after deploy
+  initialArticles     Int      @default(5)    // how many articles to generate for a brand new domain (backdated)
+  maxDomainsPerDay    Int      @default(15)   // max domains to process per day
+  updatedAt           DateTime @updatedAt
+}
+
+model SchedulerJob {
+  id              String   @id @default(cuid())
+  domainId        String
+  type            String   // "generate" | "deploy" | "purge" | "initial-setup"
+  status          String   // "pending" | "running" | "success" | "failed"
+  scheduledAt     DateTime // when this job should run
+  startedAt       DateTime?
+  completedAt     DateTime?
+  message         String   @default("")
+  articlesCreated Int      @default(0)
+  filesDeployed   Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  domain          Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+}
+
+// ── Notifications ──
+
+model Notification {
+  id         String   @id @default(cuid())
+  type       String   // deploy-success, deploy-failed, backlink-placed, article-generated, health-alert, milestone, info
+  title      String
+  message    String   @default("")
+  link       String   @default("") // optional deep link (e.g. /domains/abc)
+  severity   String   @default("info") // info, success, warning, error
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([isRead, createdAt])
+}
+
+// ── API Usage (cost tracker) ──
+
+model ApiUsage {
+  id            String   @id @default(cuid())
+  provider      String   // "claude" | "openai" | ...
+  model         String   // e.g. "claude-haiku-4-5"
+  operation     String   @default("") // "article-generate" | "title-suggest" | ...
+  inputTokens   Int      @default(0)
+  outputTokens  Int      @default(0)
+  totalTokens   Int      @default(0)
+  costUsd       Float    @default(0)   // estimated USD cost
+  domainId      String?                // optional: which domain this call was for
+  articleId     String?                // optional: which article this call produced
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([provider, model])
+}
+
+// ── Auth ──
+
+model User {
+  id            String    @id @default(cuid())
+  username      String    @unique
+  passwordHash  String
+  name          String    @default("")
+  role          String    @default("operator") // admin | operator
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions      Session[]
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  token      String   @unique
+  userId     String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+}
+
+model DomainSchedule {
+  id              String   @id @default(cuid())
+  domainId        String   @unique
+  isActive        Boolean  @default(true)  // is this domain in the scheduler rotation
+  lastGenerated   DateTime?               // last time an article was generated
+  lastDeployedByScheduler DateTime?       // last auto-deploy
+  nextScheduled   DateTime?               // next planned generation
+  totalGenerated  Int      @default(0)     // lifetime articles generated by scheduler
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  domain          Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+}

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tentang - <%= siteName %></title>
+    <meta name="description" content="Tentang <%= siteName %>. <%= siteDescription %>">
+    <link rel="canonical" href="<%= siteUrl %>/about.html">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=<%= fontFamily.replace(/ /g, '+') %>:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="mn-body mn-body-about">
+    <header class="mn-header">
+        <div class="mn-header-inner">
+            <a href="<%= siteUrl %>" class="mn-site-name"><%= siteName %></a>
+            <nav class="mn-nav">
+                <a href="/" class="mn-nav-link">Beranda</a>
+                <% categories.forEach(function(cat) { %>
+                <a href="/category/<%= cat.slug %>.html" class="mn-nav-link"><%= cat.name %></a>
+                <% }); %>
+                <a href="/about.html" class="mn-nav-link mn-nav-active">Tentang</a>
+            </nav>
+            <button class="mn-menu-toggle" aria-label="Toggle navigasi">
+                <span class="mn-menu-bar"></span>
+                <span class="mn-menu-bar"></span>
+            </button>
+        </div>
+    </header>
+
+    <main class="mn-main">
+        <div class="mn-about-content">
+            <h1 class="mn-about-title">Tentang</h1>
+            <div class="mn-about-body">
+                <p><%= siteDescription %></p>
+                <p>Kami membahas berbagai topik untuk membuat Anda tetap terinformasi dan terlibat. Jelajahi kategori kami di bawah ini untuk menemukan konten yang menarik bagi Anda.</p>
+            </div>
+
+            <% if (categories.length > 0) { %>
+            <section class="mn-about-categories">
+                <h2 class="mn-about-subtitle">Topik</h2>
+                <ul class="mn-topic-list">
+                    <% categories.forEach(function(cat) { %>
+                    <li class="mn-topic-item">
+                        <a href="/category/<%= cat.slug %>.html" class="mn-topic-link">
+                            <span class="mn-topic-name"><%= cat.name %></span>
+                            <% if (cat.description) { %>
+                            <span class="mn-topic-desc"><%= cat.description %></span>
+                            <% } %>
+                        </a>
+                    </li>
+                    <% }); %>
+                </ul>
+            </section>
+            <% } %>
+        </div>
+    </main>
+
+    <footer class="mn-footer">
+        <div class="mn-container">
+            <p class="mn-copyright">&copy; <%= new Date().getFullYear() %> <%= siteName %></p>
+        </div>
+    </footer>
+
+    <script>
+    (function() {
+        var toggle = document.querySelector('.mn-menu-toggle');
+        var nav = document.querySelector('.mn-nav');
+        if (toggle && nav) {
+            toggle.addEventListener('click', function() {
+                nav.classList.toggle('mn-nav-open');
+                toggle.classList.toggle('mn-menu-active');
+            });
+        }
+    })();
+    </script>
+</body>
+</html>

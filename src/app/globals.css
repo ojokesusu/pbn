@@ -1,0 +1,483 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* Teal Premium Light Theme */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #0ea5e9;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #334155;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #84cc16;
+  --accent-foreground: #0f172a;
+  --destructive: #ef4444;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #0ea5e9;
+  --chart-1: #0ea5e9;
+  --chart-2: #84cc16;
+  --chart-3: #f59e0b;
+  --chart-4: #8b5cf6;
+  --chart-5: #ec4899;
+  --radius: 0.75rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #334155;
+  --sidebar-primary: #0ea5e9;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f1f5f9;
+  --sidebar-accent-foreground: #334155;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #0ea5e9;
+}
+
+.dark {
+  /* Teal Premium Dark Theme */
+  --background: #0a0e1a;
+  --foreground: #f0f4f8;
+  --card: #111827;
+  --card-foreground: #f0f4f8;
+  --popover: #111827;
+  --popover-foreground: #f0f4f8;
+  --primary: #0ea5e9;
+  --primary-foreground: #ffffff;
+  --secondary: #1e293b;
+  --secondary-foreground: #e2e8f0;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #84cc16;
+  --accent-foreground: #0a0e1a;
+  --destructive: #ef4444;
+  --border: rgba(148, 163, 184, 0.1);
+  --input: rgba(148, 163, 184, 0.15);
+  --ring: #0ea5e9;
+  --chart-1: #0ea5e9;
+  --chart-2: #84cc16;
+  --chart-3: #f59e0b;
+  --chart-4: #8b5cf6;
+  --chart-5: #ec4899;
+  --radius: 0.75rem;
+  --sidebar: #0f1629;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-primary: #0ea5e9;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1e293b;
+  --sidebar-accent-foreground: #e2e8f0;
+  --sidebar-border: rgba(148, 163, 184, 0.08);
+  --sidebar-ring: #0ea5e9;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Sidebar is now in offcanvas mode — no hover-reveal needed. */
+
+/* ═══════════════════════════════════════════ */
+/* Driver.js Tutorial — Light Theme           */
+/* ═══════════════════════════════════════════ */
+
+.driver-overlay {
+  background: rgba(0, 0, 0, 0.5) !important;
+}
+
+.driver-popover {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15) !important;
+  color: #334155 !important;
+  max-width: 360px !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+.driver-popover-title {
+  color: #0f172a !important;
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  line-height: 1.4 !important;
+  text-shadow: none !important;
+  letter-spacing: -0.01em !important;
+}
+
+.driver-popover-description {
+  color: #64748b !important;
+  font-size: 14px !important;
+  line-height: 1.65 !important;
+  margin-top: 8px !important;
+  text-shadow: none !important;
+}
+
+.driver-popover-progress-text {
+  color: #0ea5e9 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+.driver-popover-navigation-btns {
+  gap: 8px !important;
+}
+
+.driver-popover-prev-btn {
+  background: #f1f5f9 !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  color: #334155 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  padding: 7px 16px !important;
+  text-shadow: none !important;
+  transition: all 0.2s !important;
+}
+
+.driver-popover-prev-btn:hover {
+  background: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+}
+
+.driver-popover-next-btn,
+.driver-popover-close-btn-text {
+  background: #0ea5e9 !important;
+  border: none !important;
+  border-radius: 8px !important;
+  color: #ffffff !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  padding: 7px 18px !important;
+  text-shadow: none !important;
+  transition: all 0.2s !important;
+}
+
+.driver-popover-next-btn:hover,
+.driver-popover-close-btn-text:hover {
+  background: #0284c7 !important;
+}
+
+.driver-popover-arrow-side-left .driver-popover-arrow,
+.driver-popover-arrow-side-right .driver-popover-arrow,
+.driver-popover-arrow-side-top .driver-popover-arrow,
+.driver-popover-arrow-side-bottom .driver-popover-arrow {
+  border-color: #ffffff !important;
+}
+
+.driver-popover-close-btn {
+  color: #94a3b8 !important;
+  font-size: 20px !important;
+}
+
+.driver-popover-close-btn:hover {
+  color: #334155 !important;
+}
+
+/* Highlight elemen yang aktif */
+.driver-active-element {
+  border-radius: 8px !important;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.4), 0 0 20px rgba(14, 165, 233, 0.15) !important;
+  outline: 2px solid rgba(14, 165, 233, 0.6) !important;
+  outline-offset: 2px !important;
+}
+
+/* Hide Next.js DevTools indicator in dev mode */
+[data-next-mark],
+nextjs-portal { display: none !important; }
+
+/* ═══════════════════════════════════════════ */
+/* Fun-Professional Animations & Effects      */
+/* ═══════════════════════════════════════════ */
+
+/* Bounce-in animation for cards */
+@keyframes bounceIn {
+  0% { opacity: 0; transform: scale(0.9) translateY(12px); }
+  60% { opacity: 1; transform: scale(1.02) translateY(-2px); }
+  100% { transform: scale(1) translateY(0); }
+}
+
+/* Gentle float animation */
+@keyframes gentleFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* Pulse glow for active elements */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(14, 165, 233, 0); }
+}
+
+/* Shimmer effect for loading */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Counter roll animation */
+@keyframes countUp {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Gradient shift for banners */
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Wiggle on hover */
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-3deg); }
+  75% { transform: rotate(3deg); }
+}
+
+/* ── Utility classes ── */
+
+.animate-float {
+  animation: gentleFloat 3s ease-in-out infinite;
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradientShift 4s ease infinite;
+}
+
+/* ═══════════════════════════════════════════ */
+/* Global page animations — applies to ALL    */
+/* cards, stat grids, tables across all menus  */
+/* ═══════════════════════════════════════════ */
+
+/* Fade-slide-in for all rounded cards/panels */
+[class*="rounded-xl"][class*="border"] {
+  animation: fadeSlideIn 0.4s ease both;
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Stagger cards in grids */
+.grid > [class*="rounded-xl"]:nth-child(1) { animation-delay: 0.03s; }
+.grid > [class*="rounded-xl"]:nth-child(2) { animation-delay: 0.06s; }
+.grid > [class*="rounded-xl"]:nth-child(3) { animation-delay: 0.09s; }
+.grid > [class*="rounded-xl"]:nth-child(4) { animation-delay: 0.12s; }
+.grid > [class*="rounded-xl"]:nth-child(5) { animation-delay: 0.15s; }
+.grid > [class*="rounded-xl"]:nth-child(6) { animation-delay: 0.18s; }
+
+/* Hover lift — all cards globally */
+[class*="rounded-xl"][class*="border"][class*="shadow"] {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+[class*="rounded-xl"][class*="border"][class*="shadow"]:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(14, 165, 233, 0.12), 0 0 0 1px rgba(14, 165, 233, 0.08);
+}
+
+/* Icon containers — bounce on parent hover */
+[class*="rounded-xl"]:hover > div > [class*="rounded-xl"][class*="items-center"][class*="justify-center"],
+[class*="rounded-xl"]:hover > div > div > [class*="rounded-xl"][class*="items-center"][class*="justify-center"] {
+  transform: scale(1.1) rotate(3deg);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Buttons — subtle scale on hover */
+button[class*="rounded-lg"]:not(:disabled):hover {
+  transform: scale(1.02);
+}
+button[class*="rounded-lg"] {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+/* Badge — subtle pop on hover */
+[class*="Badge"]:hover, span[class*="bg-"]:hover {
+  transform: scale(1.05);
+  transition: transform 0.15s ease;
+}
+
+/* Table rows — smooth slide highlight */
+tr[class*="transition-colors"]:hover td {
+  transition: background 0.15s ease;
+}
+
+/* Page header icons — always have subtle float */
+[class*="size-10"][class*="rounded-xl"] {
+  transition: transform 0.3s ease;
+}
+
+/* Sidebar menu items — smooth slide */
+[data-slot="sidebar-menu-button"] {
+  transition: all 0.15s ease !important;
+}
+[data-slot="sidebar-menu-button"]:hover {
+  transform: translateX(2px);
+}
+
+/* Dialog/Modal — pop in animation */
+[role="dialog"] [class*="rounded-xl"] {
+  animation: popIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Toast notifications — slide in */
+[style*="slideIn"] {
+  animation: toastSlide 0.3s ease both;
+}
+@keyframes toastSlide {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Progress bars — smooth fill */
+[class*="rounded-full"][class*="h-2"],
+[class*="rounded-full"][class*="h-full"] {
+  transition: width 0.5s ease;
+}
+/* ═══════════════════════════════════════════ */
+/* Dark Mode — Tailwind utility overrides     */
+/* Flips common light-mode utilities when the */
+/* .dark class is present on <html>.          */
+/* ═══════════════════════════════════════════ */
+
+.dark .bg-white { background-color: var(--card) !important; }
+
+.dark .bg-slate-50,
+.dark .bg-slate-100,
+.dark .bg-gray-50,
+.dark .bg-gray-100 { background-color: var(--muted) !important; }
+
+.dark .bg-slate-200,
+.dark .bg-gray-200 { background-color: rgba(148,163,184,0.15) !important; }
+
+.dark .text-slate-900,
+.dark .text-slate-800,
+.dark .text-slate-700,
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-gray-700 { color: var(--foreground) !important; }
+
+.dark .text-slate-600,
+.dark .text-slate-500,
+.dark .text-gray-600,
+.dark .text-gray-500 { color: var(--muted-foreground) !important; }
+
+.dark .text-slate-400,
+.dark .text-slate-300,
+.dark .text-gray-400,
+.dark .text-gray-300 { color: var(--muted-foreground) !important; opacity: 0.7; }
+
+.dark .border-slate-200,
+.dark .border-slate-100,
+.dark .border-gray-200,
+.dark .border-gray-100 { border-color: var(--border) !important; }
+
+.dark .divide-slate-200 > *,
+.dark .divide-gray-200 > * { border-color: var(--border) !important; }
+
+/* Status/badge subtle backgrounds — keep tint but adapt */
+.dark .bg-blue-50 { background-color: rgba(14,165,233,0.1) !important; }
+.dark .bg-green-50, .dark .bg-emerald-50 { background-color: rgba(34,197,94,0.1) !important; }
+.dark .bg-red-50 { background-color: rgba(239,68,68,0.1) !important; }
+.dark .bg-yellow-50, .dark .bg-amber-50 { background-color: rgba(245,158,11,0.1) !important; }
+.dark .bg-purple-50, .dark .bg-violet-50 { background-color: rgba(139,92,246,0.1) !important; }
+.dark .bg-teal-50, .dark .bg-cyan-50 { background-color: rgba(20,184,166,0.1) !important; }
+.dark .bg-lime-50 { background-color: rgba(132,204,22,0.1) !important; }
+.dark .bg-orange-50 { background-color: rgba(249,115,22,0.1) !important; }
+.dark .bg-pink-50, .dark .bg-rose-50 { background-color: rgba(236,72,153,0.1) !important; }
+
+/* Cards that use background directly via inline style hex that escaped replacement */
+.dark [style*="background: #ffffff"],
+.dark [style*="background:#ffffff"],
+.dark [style*="background: white"],
+.dark [style*="background:white"],
+.dark [style*="backgroundColor: #ffffff"],
+.dark [style*="backgroundColor:#ffffff"] { background-color: var(--card) !important; }
+
+.dark [style*="color: #0f172a"],
+.dark [style*="color:#0f172a"] { color: var(--foreground) !important; }
+
+/* ═══════════════════════════════════════════ */
+/* Non-interactive text — use arrow cursor    */
+/* Prevents the I-beam (text-select) cursor   */
+/* from appearing on headings & static text   */
+/* ═══════════════════════════════════════════ */
+
+h1, h2, h3, h4, h5, h6,
+label,
+[class*="text-"]:not(input):not(textarea):not(a):not(button):not([role="button"]) {
+  cursor: default;
+}
+
+/* Keep I-beam on actual input/editable surfaces */
+input, textarea, [contenteditable="true"] {
+  cursor: text;
+}
+
+/* Links and buttons keep pointer */
+a, button, [role="button"], [onclick] {
+  cursor: pointer;
+}

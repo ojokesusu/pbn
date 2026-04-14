@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= category.name %> - <%= siteName %></title>
+    <meta name="description" content="<%= category.description || ('Jelajahi semua artikel di ' + category.name + ' pada ' + siteName) %>">
+    <link rel="canonical" href="<%= siteUrl %>/category/<%= category.slug %>.html">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=<%= fontFamily.replace(/ /g, '+') %>:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="fl-body">
+
+    <!-- Header -->
+    <header class="fl-header fl-header--<%= headerStyle %>">
+        <div class="fl-header__brand">
+            <a href="<%= siteUrl %>" class="fl-header__logo"><%= siteName %></a>
+            <p class="fl-header__tagline"><%= siteDescription %></p>
+        </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="fl-nav">
+        <div class="fl-nav__inner">
+            <a href="<%= siteUrl %>" class="fl-nav__link">Beranda</a>
+            <% categories.forEach(function(cat) { %>
+            <a href="/category/<%= cat.slug %>.html" class="fl-nav__link<%= cat.slug === category.slug ? ' fl-nav__link--active' : '' %>"><%= cat.name %></a>
+            <% }); %>
+            <a href="/about.html" class="fl-nav__link">Tentang</a>
+        </div>
+    </nav>
+
+    <main class="fl-main">
+
+        <!-- Category Header -->
+        <section class="fl-category-header">
+            <div class="fl-category-header__inner">
+                <h1 class="fl-category-header__title"><%= category.name %></h1>
+                <% if (category.description) { %>
+                <p class="fl-category-header__desc"><%= category.description %></p>
+                <% } %>
+                <div class="fl-category-header__count"><%= articles.length %> artikel</div>
+            </div>
+        </section>
+
+        <% if (articles.length > 0) { %>
+        <!-- Articles Grid -->
+        <section class="fl-grid-section">
+            <div class="fl-grid">
+                <% articles.forEach(function(article) { %>
+                <article class="fl-card">
+                    <a href="/articles/<%= article.slug %>.html" class="fl-card__link">
+                        <% if (article.featuredImage) { %>
+                        <div class="fl-card__image-wrap">
+                            <img src="<%= article.featuredImage %>" alt="<%= article.title %>" class="fl-card__image" loading="lazy">
+                            <span class="fl-badge"><%= article.category %></span>
+                        </div>
+                        <% } else { %>
+                        <div class="fl-card__image-wrap fl-card__image-wrap--placeholder">
+                            <span class="fl-badge"><%= article.category %></span>
+                        </div>
+                        <% } %>
+                        <div class="fl-card__body">
+                            <h3 class="fl-card__title"><%= article.title %></h3>
+                            <p class="fl-card__excerpt"><%= article.excerpt %></p>
+                            <div class="fl-card__meta">
+                                <span class="fl-card__author"><%= article.authorName %></span>
+                                <span class="fl-card__date"><%= article.publishedDate %></span>
+                            </div>
+                        </div>
+                    </a>
+                </article>
+                <% }); %>
+            </div>
+        </section>
+        <% } else { %>
+        <section class="fl-empty">
+            <p class="fl-empty__text">Belum ada artikel dalam kategori ini. Nantikan konten terbaru!</p>
+            <a href="<%= siteUrl %>" class="fl-empty__link">Kembali ke Beranda</a>
+        </section>
+        <% } %>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="fl-footer fl-footer--<%= footerStyle %>">
+        <div class="fl-footer__cta">
+            <h3 class="fl-footer__cta-title">Tetap terupdate</h3>
+            <p class="fl-footer__cta-text">Dapatkan artikel terbaru langsung ke inbox Anda. Tanpa spam.</p>
+            <form class="fl-footer__form" onsubmit="return false;">
+                <input type="email" class="fl-footer__input" placeholder="Email Anda" aria-label="Email Anda">
+                <button type="submit" class="fl-footer__btn">Berlangganan</button>
+            </form>
+        </div>
+        <div class="fl-footer__columns">
+            <div class="fl-footer__col">
+                <h4 class="fl-footer__col-title">Kategori</h4>
+                <ul class="fl-footer__list">
+                    <% categories.forEach(function(cat) { %>
+                    <li><a href="/category/<%= cat.slug %>.html" class="fl-footer__link"><%= cat.name %></a></li>
+                    <% }); %>
+                </ul>
+            </div>
+            <div class="fl-footer__col">
+                <h4 class="fl-footer__col-title">Perusahaan</h4>
+                <ul class="fl-footer__list">
+                    <li><a href="/about.html" class="fl-footer__link">Tentang Kami</a></li>
+                    <li><a href="#" class="fl-footer__link">Kontak</a></li>
+                    <li><a href="#" class="fl-footer__link">Karir</a></li>
+                    <li><a href="#" class="fl-footer__link">Iklan</a></li>
+                </ul>
+            </div>
+            <div class="fl-footer__col">
+                <h4 class="fl-footer__col-title">Legal</h4>
+                <ul class="fl-footer__list">
+                    <li><a href="#" class="fl-footer__link">Kebijakan Privasi</a></li>
+                    <li><a href="#" class="fl-footer__link">Syarat Layanan</a></li>
+                    <li><a href="#" class="fl-footer__link">Kebijakan Cookie</a></li>
+                    <li><a href="#" class="fl-footer__link">DMCA</a></li>
+                </ul>
+            </div>
+            <div class="fl-footer__col">
+                <h4 class="fl-footer__col-title"><%= siteName %></h4>
+                <p class="fl-footer__about"><%= siteDescription %></p>
+            </div>
+        </div>
+        <div class="fl-footer__bottom">
+            <p>&copy; <%= new Date().getFullYear() %> <%= siteName %>. Hak cipta dilindungi.</p>
+        </div>
+    </footer>
+
+</body>
+</html>
