@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 
 export type Me = {
   id: string
@@ -32,4 +33,20 @@ export function useMe() {
   }, [])
 
   return { me, loading }
+}
+
+// Redirects non-admin users to the dashboard home.
+// Returns { me, loading, isAdmin } — page should render a fallback while loading.
+export function useAdminGuard() {
+  const { me, loading } = useMe()
+  const router = useRouter()
+  const isAdmin = me?.role === "admin"
+
+  useEffect(() => {
+    if (!loading && !isAdmin) {
+      router.replace("/")
+    }
+  }, [loading, isAdmin, router])
+
+  return { me, loading, isAdmin }
 }

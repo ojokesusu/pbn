@@ -74,6 +74,7 @@ type NavItem = {
   badge?: (s: SidebarStats | null) => string | null
   badgeTone?: (s: SidebarStats | null) => BadgeTone
   pulse?: (s: SidebarStats | null) => boolean // show pulsing dot
+  adminOnly?: boolean // hidden from operator users
 }
 
 type NavGroup = {
@@ -100,6 +101,7 @@ const MENU_GROUPS: NavGroup[] = [
         tourId: "nav-server",
         badge: (s) => fmtCount(s?.totalServers),
         badgeTone: () => "teal",
+        adminOnly: true,
       },
       {
         title: "Domain",
@@ -131,6 +133,7 @@ const MENU_GROUPS: NavGroup[] = [
         badge: (s) =>
           s ? `${s.todayBacklinks}/${s.backlinkDailyLimit}` : null,
         badgeTone: () => "pink",
+        adminOnly: true,
       },
     ],
   },
@@ -263,14 +266,19 @@ export function AppSidebar() {
 
       {/* ── Main Navigation (grouped) ── */}
       <SidebarContent className="px-1.5 py-2">
-        {MENU_GROUPS.map((group) => (
+        {MENU_GROUPS.map((group) => {
+          const visibleItems = group.items.filter(
+            (item) => !item.adminOnly || me?.role === "admin"
+          )
+          if (visibleItems.length === 0) return null
+          return (
           <SidebarGroup key={group.label} className="px-0 py-1">
             <SidebarGroupLabel className="px-2 text-[9px] font-bold tracking-[0.14em] text-[color:var(--muted-foreground)] opacity-70">
               {group.label}
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="gap-0.5">
-                {group.items.map((item) => {
+                {visibleItems.map((item) => {
                   const isActive =
                     item.href === "/"
                       ? pathname === "/"
@@ -339,7 +347,8 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-        ))}
+          )
+        })}
       </SidebarContent>
 
       {/* ── Bottom Section ── */}

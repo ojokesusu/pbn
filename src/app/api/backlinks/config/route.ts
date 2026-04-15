@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { denyIfNotAdmin } from "@/lib/auth";
 
 export async function GET() {
+  const denied = await denyIfNotAdmin();
+  if (denied) return denied;
   try {
     let config = await prisma.backlinkConfig.findFirst();
 
@@ -27,6 +30,8 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
+  const denied = await denyIfNotAdmin();
+  if (denied) return denied;
   try {
     const body = await request.json();
     const { maxPerDomain, maxPerArticle, percentArticles } = body;

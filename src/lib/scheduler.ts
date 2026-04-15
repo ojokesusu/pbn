@@ -10,6 +10,7 @@ import { findZoneByName } from "./cloudflare";
 import { submitToIndexNow } from "./google-ping";
 import { distributeBacklinks } from "./backlink-distributor";
 import { notify, checkMilestones } from "./notifications";
+import { pollinationsFromGenre } from "./pollinations";
 
 const AUTHOR_NAMES = [
   "Rina Puspitasari", "Ahmad Fauzi", "Dewi Lestari", "Budi Santoso",
@@ -29,6 +30,7 @@ const GENRE_KEYWORDS: Record<string, string[]> = {
   Lingkungan: ["nature", "forest", "environment"], Parenting: ["family", "children", "baby"],
   Gaming: ["gaming", "esports", "game"], Fotografi: ["photography", "camera", "photo"],
   Musik: ["music", "guitar", "concert"], Pertanian: ["farming", "agriculture", "garden"],
+  iGaming: ["gaming setup", "esports arena", "neon gaming", "gaming controller", "gaming chair", "cyber tournament"],
 };
 
 async function fetchPexelsImage(genre: string): Promise<string> {
@@ -51,6 +53,47 @@ async function fetchPexelsImage(genre: string): Promise<string> {
     }
   } catch {}
   return `https://picsum.photos/seed/${Math.floor(Math.random() * 800) + 100}/1200/630`;
+}
+
+// Unified image fetcher — picks between Pexels (stock) and Pollinations (AI).
+// iGaming always uses Pollinations (unique per-article AI image).
+// Other genres: 50/50 alternating for content variety.
+async function fetchArticleImage(genre: string, title?: string): Promise<string> {
+  if (genre === "iGaming") {
+    return pollinationsFromGenre(genre, title);
+  }
+  const usePollinations = Math.random() < 0.5;
+  if (usePollinations) {
+    return pollinationsFromGenre(genre, title);
+  }
+  return fetchPexelsImage(genre);
+}
+
+// For iGaming articles, inject 2-3 extra Pollinations images after <h2> sections
+// so the rendered page feels image-heavy and visually rich (client request).
+// Non-iGaming genres pass through unchanged.
+function injectExtraImages(content: string, genre: string, title: string): string {
+  if (genre !== "iGaming") return content;
+
+  const h2Positions: number[] = [];
+  const h2Regex = /<\/h2>/gi;
+  let match;
+  while ((match = h2Regex.exec(content)) !== null) {
+    h2Positions.push(match.index + match[0].length);
+  }
+  if (h2Positions.length === 0) return content;
+
+  // Insert up to 3 images, one after each of the first 3 h2 closing tags
+  const injectCount = Math.min(3, h2Positions.length);
+  let result = content;
+  for (let i = injectCount - 1; i >= 0; i--) {
+    const pos = h2Positions[i];
+    const seed = Math.floor(Math.random() * 1_000_000);
+    const url = pollinationsFromGenre("iGaming", `${title} section ${i + 1}`, { seed });
+    const imgTag = `\n<figure style="margin:2rem 0;text-align:center;"><img src="${url}" alt="${title}" loading="lazy" style="max-width:100%;height:auto;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);" /></figure>\n`;
+    result = result.slice(0, pos) + imgTag + result.slice(pos);
+  }
+  return result;
 }
 
 function slugify(text: string): string {
@@ -92,19 +135,27 @@ export async function getSchedulerConfig() {
 
 // Calculate next scheduled time for a domain
 // Distributes evenly: if 4/week = every ~42 hours, with randomness
+// Clamps into the daily window by picking a *random* hour across the whole window
+// (not the first 2 hours) so deploys don't cluster in the morning.
+function randomHourInWindow(timeStart: number, timeEnd: number): number {
+  const span = Math.max(1, timeEnd - timeStart);
+  return timeStart + Math.floor(Math.random() * span);
+}
+
 function calculateNextSchedule(articlesPerWeek: number, timeStart: number, timeEnd: number): Date {
   const hoursPerArticle = (7 * 24) / articlesPerWeek; // e.g., 42 hours for 4/week
-  // Add randomness: ±25% jitter
+  // Add randomness: ±50% jitter
   const jitter = hoursPerArticle * (0.5 + Math.random()); // 50%-150% of interval
   const msFromNow = jitter * 60 * 60 * 1000;
 
   const next = new Date(Date.now() + msFromNow);
-  // Clamp to time window
+  // Clamp to time window — if outside, re-randomize across the WHOLE window
   const hours = next.getHours();
-  if (hours < timeStart) next.setHours(timeStart + Math.floor(Math.random() * 3));
-  else if (hours > timeEnd) {
+  if (hours < timeStart) {
+    next.setHours(randomHourInWindow(timeStart, timeEnd));
+  } else if (hours > timeEnd) {
     next.setDate(next.getDate() + 1);
-    next.setHours(timeStart + Math.floor(Math.random() * 3));
+    next.setHours(randomHourInWindow(timeStart, timeEnd));
   }
   // Randomize minutes
   next.setMinutes(Math.floor(Math.random() * 60));
@@ -176,13 +227,14 @@ export async function initialDomainSetup(domainId: string, articleCount: number 
         });
         if (existing) continue;
 
-        const featuredImage = await fetchPexelsImage(genre);
+        const featuredImage = await fetchArticleImage(genre, article.title);
         const authorName = AUTHOR_NAMES[Math.floor(Math.random() * AUTHOR_NAMES.length)];
         const catId = dbCats[catNames[i % catNames.length]];
+        const enrichedContent = injectExtraImages(article.content, genre, article.title);
 
         await prisma.article.create({
           data: {
-            title: article.title, slug, content: article.content,
+            title: article.title, slug, content: enrichedContent,
             excerpt: article.excerpt, tags: article.tags,
             authorName, featuredImage, status: "published",
             categoryId: catId, domainId, publishedAt: publishDates[i],
@@ -225,8 +277,9 @@ export async function generateSingleArticle(domainId: string): Promise<{
     });
     if (existing) return { success: false, message: "Duplicate slug" };
 
-    const featuredImage = await fetchPexelsImage(genre);
+    const featuredImage = await fetchArticleImage(genre, article.title);
     const authorName = AUTHOR_NAMES[Math.floor(Math.random() * AUTHOR_NAMES.length)];
+    const enrichedContent = injectExtraImages(article.content, genre, article.title);
 
     // Find a random category for this domain
     const categories = await prisma.category.findMany({ where: { domainId }, take: 5 });
@@ -234,7 +287,7 @@ export async function generateSingleArticle(domainId: string): Promise<{
 
     await prisma.article.create({
       data: {
-        title: article.title, slug, content: article.content,
+        title: article.title, slug, content: enrichedContent,
         excerpt: article.excerpt, tags: article.tags,
         authorName, featuredImage, status: "published",
         categoryId: catId, domainId, publishedAt: new Date(),
@@ -432,11 +485,13 @@ export async function activateDomains(domainIds: string[], config?: { articlesPe
     // Stagger initial schedule times so they don't all run at once
     const staggerMs = activated * (Math.random() * 30 + 10) * 60 * 1000; // 10-40 min apart
     const nextTime = new Date(Date.now() + staggerMs);
-    // Clamp to time window
-    if (nextTime.getHours() < cfg.timeStart) nextTime.setHours(cfg.timeStart);
+    // Clamp to time window — random hour across the whole window, not just timeStart
+    if (nextTime.getHours() < cfg.timeStart) {
+      nextTime.setHours(randomHourInWindow(cfg.timeStart, cfg.timeEnd));
+    }
     if (nextTime.getHours() > cfg.timeEnd) {
       nextTime.setDate(nextTime.getDate() + 1);
-      nextTime.setHours(cfg.timeStart);
+      nextTime.setHours(randomHourInWindow(cfg.timeStart, cfg.timeEnd));
     }
     nextTime.setMinutes(Math.floor(Math.random() * 60));
 

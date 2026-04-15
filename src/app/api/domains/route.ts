@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 
 export async function GET() {
   try {
+    const user = await getCurrentUser();
+    const isAdmin = user?.role === "admin";
+
     const domains = await prisma.domain.findMany({
       include: {
         theme: { select: { id: true, name: true, layoutName: true, isGenerated: true } },
-        server: { select: { id: true, name: true, host: true } },
+        server: { select: { id: true, label: true, name: true, host: true } },
         _count: {
           select: { articles: true },
         },
@@ -26,8 +30,15 @@ export async function GET() {
     const enriched = domains.map((d) => {
       const wpArticles = wpMap.get(d.id) || 0;
       const aiArticles = d._count.articles - wpArticles;
+      // Mask server info for non-admin — ops shouldn't see NS/IP, but label is safe
+      const safeServer = isAdmin
+        ? d.server
+        : d.server
+          ? { id: d.server.id, label: d.server.label, name: "******", host: "******" }
+          : null;
       return {
         ...d,
+        server: safeServer,
         wpArticles,
         aiArticles,
         contentSource: wpArticles > 0 && aiArticles > 0
@@ -66,7 +77,7 @@ export async function POST(request: NextRequest) {
       },
       include: {
         theme: { select: { id: true, name: true, layoutName: true, isGenerated: true } },
-        server: { select: { id: true, name: true, host: true } },
+        server: { select: { id: true, label: true, name: true, host: true } },
         _count: { select: { articles: true } },
       },
     });

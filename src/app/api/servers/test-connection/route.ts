@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { testFtpConnection } from "@/lib/ftp";
+import { denyIfNotAdmin } from "@/lib/auth";
 
 export async function POST(request: Request) {
+  const denied = await denyIfNotAdmin();
+  if (denied) return denied;
   try {
     const { host, username, password, port } = await request.json();
 

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { denyIfNotAdmin } from "@/lib/auth";
 
 export async function GET() {
+  const denied = await denyIfNotAdmin();
+  if (denied) return denied;
   try {
     const servers = await prisma.server.findMany({
       include: { _count: { select: { domains: true } } },
@@ -19,10 +22,12 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const denied = await denyIfNotAdmin();
+  if (denied) return denied;
   try {
     const body = await request.json();
 
-    const { name, host, username, password, port, status } = body;
+    const { label, name, nameserver2, host, username, password, port, status } = body;
 
     if (!name || !host) {
       return NextResponse.json(
@@ -31,9 +36,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Auto-generate sequential label if none provided (e.g. "Server-490")
+    let finalLabel = (label as string | undefined)?.trim();
+    if (!finalLabel) {
+      const count = await prisma.server.count();
+      finalLabel = `Server-${String(count + 1).padStart(3, "0")}`;
+    }
+
     const server = await prisma.server.create({
       data: {
+        label: finalLabel,
         name,
+        nameserver2: nameserver2 ?? "",
         host,
         username: username ?? "",
         password: password ?? "",

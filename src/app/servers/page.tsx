@@ -21,6 +21,7 @@ import { SidebarInset } from "@/components/ui/sidebar"
 import { AppHeader } from "@/components/layout/app-header"
 import { Button } from "@/components/ui/button"
 import { useConfirm } from "@/components/ui/confirm-modal"
+import { useAdminGuard } from "@/hooks/use-me"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import {
@@ -52,7 +53,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 interface Server {
   id: string
+  label: string
   name: string
+  nameserver2: string
   host: string
   username: string
   port: number
@@ -102,6 +105,7 @@ type SyncReport = {
 export default function ServersPage() {
   const router = useRouter()
   const confirm = useConfirm()
+  const { isAdmin, loading: meLoading } = useAdminGuard()
   const [servers, setServers] = useState<Server[]>([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -119,7 +123,11 @@ export default function ServersPage() {
     if (statusFilter && s.status !== statusFilter) return false
     if (!search) return true
     const q = search.toLowerCase()
-    return s.name.toLowerCase().includes(q) || s.host.toLowerCase().includes(q) || s.username.toLowerCase().includes(q)
+    return (
+      (s.label ?? "").toLowerCase().includes(q) ||
+      s.name.toLowerCase().includes(q) ||
+      s.host.toLowerCase().includes(q)
+    )
   })
   const totalPages = Math.ceil(filtered.length / perPage)
   const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage)
@@ -201,6 +209,15 @@ export default function ServersPage() {
     })
   }
 
+  if (meLoading || !isAdmin) {
+    return (
+      <SidebarInset>
+        <AppHeader title="Server" />
+        <div className="flex-1 p-6" style={{ background: "var(--background)", minHeight: "100vh" }} />
+      </SidebarInset>
+    )
+  }
+
   return (
     <SidebarInset>
       <AppHeader title="Server" />
@@ -261,7 +278,7 @@ export default function ServersPage() {
                 <div className="relative flex-1 min-w-[220px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4" style={{ color: "var(--muted-foreground)" }} />
                   <Input
-                    placeholder="Cari server, host, username..."
+                    placeholder="Cari label, nameserver, IP..."
                     value={search}
                     onChange={(e) => { setSearch(e.target.value); setCurrentPage(1) }}
                     className="pl-10 rounded-lg"
@@ -309,10 +326,8 @@ export default function ServersPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-b" style={{ borderColor: "var(--border)" }}>
-                    <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Nama Server</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Host (IP)</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Username</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Port</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Label</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Nameserver</TableHead>
                     <TableHead className="text-xs uppercase tracking-wider text-center py-4" style={{ color: "var(--muted-foreground)" }}>Domain</TableHead>
                     <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Status</TableHead>
                     <TableHead className="text-xs uppercase tracking-wider text-right py-4" style={{ color: "var(--muted-foreground)" }}>Aksi</TableHead>
@@ -326,17 +341,18 @@ export default function ServersPage() {
                         <TableCell className="font-medium py-4" style={{ color: "var(--secondary-foreground)" }}>
                           <Link
                             href={`/servers/${server.id}`}
-                            className="hover:underline"
-                            style={{ color: "var(--secondary-foreground)" }}
+                            className="hover:underline font-mono"
+                            style={{ color: "#0ea5e9" }}
                           >
-                            {server.name}
+                            {server.label || "Server-???"}
                           </Link>
                         </TableCell>
-                        <TableCell className="font-mono text-sm py-4" style={{ color: "var(--secondary-foreground)" }}>
-                          {server.host}
+                        <TableCell className="py-4">
+                          <div className="font-mono text-xs" style={{ color: "var(--muted-foreground)" }}>
+                            <div>{server.name || "—"}</div>
+                            {server.nameserver2 && <div>{server.nameserver2}</div>}
+                          </div>
                         </TableCell>
-                        <TableCell className="py-4" style={{ color: "var(--secondary-foreground)" }}>{server.username}</TableCell>
-                        <TableCell className="py-4" style={{ color: "var(--secondary-foreground)" }}>{server.port}</TableCell>
                         <TableCell className="text-center py-4" style={{ color: "var(--secondary-foreground)" }}>
                           {server._count.domains}
                         </TableCell>
@@ -417,8 +433,8 @@ export default function ServersPage() {
               <DialogTitle style={{ color: "var(--foreground)" }}>Hapus Server</DialogTitle>
               <DialogDescription style={{ color: "var(--muted-foreground)" }}>
                 Apakah Anda yakin ingin menghapus server{" "}
-                <span className="font-semibold" style={{ color: "var(--foreground)" }}>
-                  {serverToDelete?.name}
+                <span className="font-semibold font-mono" style={{ color: "var(--foreground)" }}>
+                  {serverToDelete?.label || serverToDelete?.name}
                 </span>
                 ? Tindakan ini tidak dapat dibatalkan. Semua domain
                 yang terkait dengan server ini juga akan terpengaruh.

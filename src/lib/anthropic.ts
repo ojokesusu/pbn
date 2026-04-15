@@ -166,6 +166,15 @@ const GENRE_TOPICS: Record<string, string[]> = {
     "urban farming", "teknologi pertanian", "peternakan", "agribisnis",
     "tanaman hias", "kebun sayur",
   ],
+  iGaming: [
+    "tren industri iGaming global", "perkembangan esports Asia", "inovasi platform gaming online",
+    "sejarah game populer", "teknologi live streaming game", "komunitas gamer Indonesia",
+    "turnamen esports internasional", "review platform gaming terbaru",
+    "karier profesional di industri gaming", "inovasi AI untuk game",
+    "tips memilih platform hiburan digital", "teknologi VR dalam game",
+    "dampak ekonomi industri gaming", "regulasi gaming di Asia Tenggara",
+    "inovasi mobile gaming",
+  ],
 };
 
 const CATEGORY_NAMES: Record<string, string[]> = {
@@ -189,6 +198,7 @@ const CATEGORY_NAMES: Record<string, string[]> = {
   Fotografi: ["Fotografi", "Kamera", "Tips Foto", "Editing", "Visual"],
   Musik: ["Musik", "Band", "Musisi", "Chord", "Review Musik"],
   Pertanian: ["Pertanian", "Agrikultur", "Hidroponik", "Kebun", "Peternakan"],
+  iGaming: ["iGaming", "Berita Gaming", "Esports", "Platform Review", "Industry News"],
 };
 
 // Generate a single article using Claude

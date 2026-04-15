@@ -627,11 +627,16 @@ export default function Home() {
             <div className="grid grid-cols-2 gap-2 mt-3">
               <div className="rounded-lg px-3 py-2" style={{ background: "rgba(14,165,233,0.06)" }}>
                 <p className="text-lg font-bold text-[#0ea5e9]">{loading ? "—" : deployedCount}</p>
-                <p className="text-[10px] text-[color:var(--muted-foreground)]">Deployed</p>
+                <p className="text-[10px] text-[color:var(--muted-foreground)]">Domain live total</p>
+                {!loading && (stats?.todayDeploys ?? 0) > 0 && (
+                  <p className="text-[9px] font-medium mt-0.5" style={{ color: "#10b981" }}>
+                    +{stats?.todayDeploys} deploy hari ini
+                  </p>
+                )}
               </div>
               <div className="rounded-lg px-3 py-2" style={{ background: "rgba(245,158,11,0.06)" }}>
                 <p className="text-lg font-bold text-[#f59e0b]">{loading ? "—" : totalDomains - deployedCount}</p>
-                <p className="text-[10px] text-[color:var(--muted-foreground)]">Belum</p>
+                <p className="text-[10px] text-[color:var(--muted-foreground)]">Belum deploy</p>
               </div>
             </div>
           </div>

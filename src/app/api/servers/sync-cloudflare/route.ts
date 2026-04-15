@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { listAllZones, bareDomain, type CfZone } from "@/lib/cloudflare";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, denyIfNotAdmin } from "@/lib/auth";
 import { notify } from "@/lib/notifications";
 
 export async function POST() {
+  const denied = await denyIfNotAdmin();
+  if (denied) return denied;
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

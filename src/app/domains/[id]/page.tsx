@@ -104,7 +104,7 @@ interface Domain {
   status: string
   themeId: string | null
   serverId: string | null
-  server: { id: string; name: string; host: string } | null
+  server: { id: string; label?: string; name: string; nameserver2?: string; host: string } | null
   lastDeployed: string | null
   createdAt: string
   updatedAt: string
@@ -636,10 +636,10 @@ export default function DomainDetailPage() {
                     <dl className="grid gap-4 sm:grid-cols-2">
                       <div>
                         <dt className="text-sm text-muted-foreground">
-                          Nama Server
+                          Label
                         </dt>
-                        <dd className="mt-1 font-medium">
-                          {domain.server?.name ?? "Belum ditetapkan"}
+                        <dd className="mt-1 font-medium font-mono">
+                          {domain.server?.label ?? "Belum ditetapkan"}
                         </dd>
                       </div>
                       <div>
@@ -648,6 +648,22 @@ export default function DomainDetailPage() {
                         </dt>
                         <dd className="mt-1 font-mono text-sm">
                           {domain.server?.host ?? "Belum ditetapkan"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-sm text-muted-foreground">
+                          Nameserver 1
+                        </dt>
+                        <dd className="mt-1 font-mono text-sm">
+                          {domain.server?.name ?? "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-sm text-muted-foreground">
+                          Nameserver 2
+                        </dt>
+                        <dd className="mt-1 font-mono text-sm">
+                          {(domain.server as { nameserver2?: string })?.nameserver2 ?? "—"}
                         </dd>
                       </div>
                     </dl>

@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { denyIfNotAdmin } from "@/lib/auth";
 
 // GET /api/backlinks/stats — Distribution stats per domain
 export async function GET() {
+  const denied = await denyIfNotAdmin();
+  if (denied) return denied;
   try {
     let config = await prisma.backlinkConfig.findFirst();
     if (!config) {

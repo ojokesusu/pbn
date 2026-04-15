@@ -59,7 +59,9 @@ interface DomainItem {
 
 interface ServerData {
   id: string
+  label: string
   name: string
+  nameserver2: string
   host: string
   username: string
   password: string
@@ -113,7 +115,9 @@ export default function ServerDetailPage() {
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
 
   const [form, setForm] = useState({
+    label: "",
     name: "",
+    nameserver2: "",
     host: "",
     username: "",
     password: "",
@@ -132,7 +136,9 @@ export default function ServerDetailPage() {
       const data = await res.json()
       setServer(data)
       setForm({
+        label: data.label ?? "",
         name: data.name,
+        nameserver2: data.nameserver2 ?? "",
         host: data.host,
         username: data.username,
         password: data.password,
@@ -192,7 +198,7 @@ export default function ServerDetailPage() {
     setSuccess("")
 
     if (!form.name.trim()) {
-      setError("Nama server wajib diisi.")
+      setError("Nameserver 1 wajib diisi.")
       return
     }
     if (!form.host.trim()) {
@@ -206,7 +212,9 @@ export default function ServerDetailPage() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          label: form.label.trim(),
           name: form.name.trim(),
+          nameserver2: form.nameserver2.trim(),
           host: form.host.trim(),
           username: form.username.trim(),
           password: form.password,
@@ -283,9 +291,11 @@ export default function ServerDetailPage() {
 
   const serverStatus = statusConfig[server.status] ?? statusConfig.inactive
 
+  const displayLabel = server.label || server.name || "Server ???"
+
   return (
     <SidebarInset>
-      <AppHeader title={server.name} />
+      <AppHeader title={displayLabel} />
       <div className="flex-1 space-y-6 p-6">
         {/* Header */}
         <div className="flex items-start justify-between">
@@ -300,8 +310,8 @@ export default function ServerDetailPage() {
             </Button>
             <div>
               <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-bold tracking-tight">
-                  {server.name}
+                <h2 className="text-2xl font-bold tracking-tight font-mono">
+                  {displayLabel}
                 </h2>
                 <Badge variant="outline" className={serverStatus.className}>
                   {serverStatus.label}
@@ -398,13 +408,16 @@ export default function ServerDetailPage() {
                   </CardHeader>
                   <CardContent className="grid gap-6 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Nama Server</Label>
+                      <Label htmlFor="label">Label</Label>
                       <Input
-                        id="name"
-                        value={form.name}
-                        onChange={(e) => updateField("name", e.target.value)}
-                        required
+                        id="label"
+                        placeholder="Server-XXX"
+                        value={form.label}
+                        onChange={(e) => updateField("label", e.target.value)}
                       />
+                      <p className="text-[11px] text-muted-foreground">
+                        Generic display label — hindari nama provider / lokasi.
+                      </p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="host">Host / IP Address</Label>
@@ -413,6 +426,27 @@ export default function ServerDetailPage() {
                         value={form.host}
                         onChange={(e) => updateField("host", e.target.value)}
                         required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Nameserver 1</Label>
+                      <Input
+                        id="name"
+                        placeholder="ns1.example.com"
+                        value={form.name}
+                        onChange={(e) => updateField("name", e.target.value)}
+                        className="font-mono text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="nameserver2">Nameserver 2</Label>
+                      <Input
+                        id="nameserver2"
+                        placeholder="ns2.example.com"
+                        value={form.nameserver2}
+                        onChange={(e) => updateField("nameserver2", e.target.value)}
+                        className="font-mono text-sm"
                       />
                     </div>
                     <div className="space-y-2">
@@ -509,7 +543,9 @@ export default function ServerDetailPage() {
                       setTestResult(null)
                       if (server) {
                         setForm({
+                          label: server.label ?? "",
                           name: server.name,
+                          nameserver2: server.nameserver2 ?? "",
                           host: server.host,
                           username: server.username,
                           password: server.password,
@@ -548,14 +584,22 @@ export default function ServerDetailPage() {
                   <CardContent>
                     <dl className="grid gap-4 sm:grid-cols-2">
                       <div>
-                        <dt className="text-sm text-muted-foreground">Nama</dt>
-                        <dd className="mt-1 font-medium">{server.name}</dd>
+                        <dt className="text-sm text-muted-foreground">Label</dt>
+                        <dd className="mt-1 font-medium font-mono">{server.label || "—"}</dd>
                       </div>
                       <div>
-                        <dt className="text-sm text-muted-foreground">Host</dt>
+                        <dt className="text-sm text-muted-foreground">Host / IP</dt>
                         <dd className="mt-1 font-mono text-sm">
                           {server.host}
                         </dd>
+                      </div>
+                      <div>
+                        <dt className="text-sm text-muted-foreground">Nameserver 1</dt>
+                        <dd className="mt-1 font-mono text-sm">{server.name || "—"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-sm text-muted-foreground">Nameserver 2</dt>
+                        <dd className="mt-1 font-mono text-sm">{server.nameserver2 || "—"}</dd>
                       </div>
                       <div>
                         <dt className="text-sm text-muted-foreground">

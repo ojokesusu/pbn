@@ -251,6 +251,7 @@ export const GENRE_OPTIONS = [
   "Teknologi", "Kesehatan", "Keuangan", "Travel", "Makanan",
   "Fashion", "Olahraga", "Pendidikan", "Berita", "Otomotif",
   "Properti", "Hiburan", "Bisnis", "Seni & Budaya", "Lifestyle",
+  "iGaming",
 ];
 
 const GENRE_PALETTE_MAP: Record<string, number[]> = {
@@ -269,6 +270,8 @@ const GENRE_PALETTE_MAP: Record<string, number[]> = {
   "Bisnis": [0, 3, 8, 11, 33],
   "Seni & Budaya": [3, 7, 15, 19, 23],
   "Lifestyle": [1, 5, 9, 14, 17],
+  // iGaming: dark / neon / gaming palette (vibrant purples, cyans, magenta)
+  "iGaming": [19, 23, 27, 31, 34],
 };
 
 const GENRE_LAYOUT_PREFERENCES: Record<string, string[]> = {
@@ -294,6 +297,7 @@ const GENRE_LAYOUT_PREFERENCES: Record<string, string[]> = {
   "Fotografi": ["magazine"],
   "Musik": ["magazine"],
   "Properti": ["blog", "magazine"],
+  "iGaming": ["magazine", "blog"], // skip berita — iGaming news looks better in magazine/blog
 };
 
 export function generateUniqueThemeForGenre(genre: string, seed?: number): GeneratedTheme {

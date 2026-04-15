@@ -1,5 +1,6 @@
 import { scryptSync, randomBytes, timingSafeEqual } from "crypto"
 import { cookies } from "next/headers"
+import { NextResponse } from "next/server"
 import { prisma } from "./db"
 
 export const SESSION_COOKIE = "pbn_session"
@@ -71,6 +72,26 @@ export async function requireUser() {
   const user = await getCurrentUser()
   if (!user) throw new Error("UNAUTHORIZED")
   return user
+}
+
+// Returns the current user if admin, otherwise null.
+// API routes should check the return value and respond 403 if null.
+export async function getAdminUser() {
+  const user = await getCurrentUser()
+  if (!user || user.role !== "admin") return null
+  return user
+}
+
+// API route helper — returns a 403 NextResponse if the current user is not
+// admin, otherwise null. Usage at the top of a handler:
+//   const denied = await denyIfNotAdmin(); if (denied) return denied;
+export async function denyIfNotAdmin() {
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (user.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden — admin only" }, { status: 403 })
+  }
+  return null
 }
 
 export async function ensureDefaultAdmin() {

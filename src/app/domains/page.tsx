@@ -61,7 +61,7 @@ interface Domain {
   wpPostCount: number
   lastChecked: string | null
   theme: { id: string; name: string; layoutName: string; isGenerated: boolean } | null
-  server: { id: string; name: string; host: string } | null
+  server: { id: string; label: string; name: string; host: string } | null
   _count: { articles: number }
   wpArticles: number
   aiArticles: number
@@ -86,6 +86,13 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 type DeployFilter = "" | "deployed" | "not-deployed"
 type HealthFilter = "" | "alive" | "dead" | "unchecked"
 type ContentFilter = "" | "has-articles" | "no-articles" | "wp-only" | "ai-only" | "mixed"
+type TemplateFilter = "" | "magazine" | "blog" | "berita" | "none"
+
+const templateConfig: Record<string, { label: string; bg: string; color: string }> = {
+  magazine: { label: "Magazine", bg: "rgba(236,72,153,0.12)", color: "#ec4899" },
+  blog: { label: "Blog", bg: "rgba(14,165,233,0.12)", color: "#0ea5e9" },
+  berita: { label: "Berita", bg: "rgba(245,158,11,0.12)", color: "#f59e0b" },
+}
 
 interface SiteCheckResult {
   domainId: string
@@ -113,6 +120,7 @@ export default function DomainsPage() {
   const [healthFilter, setHealthFilter] = useState<HealthFilter>("")
   const [genreFilter, setGenreFilter] = useState("")
   const [contentFilter, setContentFilter] = useState<ContentFilter>("")
+  const [templateFilter, setTemplateFilter] = useState<TemplateFilter>("")
 
   const filtered = domains.filter((d) => {
     // Search
@@ -136,6 +144,9 @@ export default function DomainsPage() {
     if (contentFilter === "wp-only" && d.contentSource !== "wordpress") return false
     if (contentFilter === "ai-only" && d.contentSource !== "ai") return false
     if (contentFilter === "mixed" && d.contentSource !== "mixed") return false
+    // Template filter
+    if (templateFilter === "none" && d.theme?.layoutName) return false
+    if (templateFilter && templateFilter !== "none" && d.theme?.layoutName !== templateFilter) return false
     return true
   })
   const totalPages = Math.ceil(filtered.length / perPage)
@@ -154,9 +165,12 @@ export default function DomainsPage() {
     wpOnly: domains.filter((d) => d.contentSource === "wordpress").length,
     aiOnly: domains.filter((d) => d.contentSource === "ai").length,
     mixed: domains.filter((d) => d.contentSource === "mixed").length,
+    magazine: domains.filter((d) => d.theme?.layoutName === "magazine").length,
+    blog: domains.filter((d) => d.theme?.layoutName === "blog").length,
+    berita: domains.filter((d) => d.theme?.layoutName === "berita").length,
   }
 
-  const hasActiveFilters = deployFilter || healthFilter || genreFilter || contentFilter
+  const hasActiveFilters = deployFilter || healthFilter || genreFilter || contentFilter || templateFilter
 
   useEffect(() => {
     fetchDomains()
@@ -198,6 +212,7 @@ export default function DomainsPage() {
     setHealthFilter("")
     setGenreFilter("")
     setContentFilter("")
+    setTemplateFilter("")
     setSearch("")
     setCurrentPage(1)
   }
@@ -293,6 +308,16 @@ export default function DomainsPage() {
             <button onClick={() => { resetFilters(); setContentFilter("no-articles"); setCurrentPage(1) }} className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all" style={{ background: contentFilter === "no-articles" ? "var(--muted-foreground)" : "var(--muted)", color: contentFilter === "no-articles" ? "#ffffff" : "var(--muted-foreground)" }}>
               Tanpa Artikel ({stats.total - stats.withArticles})
             </button>
+            <div className="w-px h-6 self-center mx-1" style={{ background: "var(--border)" }} />
+            <button onClick={() => { resetFilters(); setTemplateFilter("magazine"); setCurrentPage(1) }} className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all" style={{ background: templateFilter === "magazine" ? "#ec4899" : "rgba(236,72,153,0.1)", color: templateFilter === "magazine" ? "#ffffff" : "#ec4899" }}>
+              Magazine ({stats.magazine})
+            </button>
+            <button onClick={() => { resetFilters(); setTemplateFilter("blog"); setCurrentPage(1) }} className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all" style={{ background: templateFilter === "blog" ? "#0ea5e9" : "rgba(14,165,233,0.1)", color: templateFilter === "blog" ? "#ffffff" : "#0ea5e9" }}>
+              Blog ({stats.blog})
+            </button>
+            <button onClick={() => { resetFilters(); setTemplateFilter("berita"); setCurrentPage(1) }} className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all" style={{ background: templateFilter === "berita" ? "#f59e0b" : "rgba(245,158,11,0.1)", color: templateFilter === "berita" ? "#ffffff" : "#f59e0b" }}>
+              Berita ({stats.berita})
+            </button>
           </div>
         )}
 
@@ -378,6 +403,20 @@ export default function DomainsPage() {
                   <option value="mixed">Mixed (WP + AI)</option>
                 </select>
 
+                {/* Template filter */}
+                <select
+                  value={templateFilter}
+                  onChange={(e) => { setTemplateFilter(e.target.value as TemplateFilter); setCurrentPage(1) }}
+                  className="h-9 rounded-lg border px-3 text-sm"
+                  style={{ background: "var(--card)", borderColor: "var(--border)", color: "var(--secondary-foreground)" }}
+                >
+                  <option value="">Template: Semua</option>
+                  <option value="magazine">Magazine ({stats.magazine})</option>
+                  <option value="blog">Blog ({stats.blog})</option>
+                  <option value="berita">Berita ({stats.berita})</option>
+                  <option value="none">Tanpa Template</option>
+                </select>
+
                 {/* Reset */}
                 {(hasActiveFilters || search) && (
                   <Button
@@ -420,6 +459,7 @@ export default function DomainsPage() {
                     <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>URL</TableHead>
                     <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Server</TableHead>
                     <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Genre</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Template</TableHead>
                     <TableHead className="text-xs uppercase tracking-wider text-center py-4" style={{ color: "var(--muted-foreground)" }}>Artikel</TableHead>
                     <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Konten</TableHead>
                     <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Health</TableHead>
@@ -456,7 +496,7 @@ export default function DomainsPage() {
                         <TableCell className="py-4">
                           {domain.server ? (
                             <div>
-                              <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{domain.server.name}</span>
+                              <span className="text-xs font-mono" style={{ color: "var(--secondary-foreground)" }}>{domain.server.label || "—"}</span>
                               <span className="text-[10px] block font-mono" style={{ color: "var(--muted-foreground)" }}>{domain.server.host}</span>
                             </div>
                           ) : (
@@ -466,6 +506,15 @@ export default function DomainsPage() {
                         <TableCell className="py-4">
                           {domain.genre ? (
                             <Badge variant="outline" className="border-0 text-[11px]" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>{domain.genre}</Badge>
+                          ) : (
+                            <span style={{ color: "var(--muted-foreground)" }}>—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-4">
+                          {domain.theme?.layoutName && templateConfig[domain.theme.layoutName] ? (
+                            <Badge variant="outline" className="border-0 text-[11px]" style={{ background: templateConfig[domain.theme.layoutName].bg, color: templateConfig[domain.theme.layoutName].color }}>
+                              {templateConfig[domain.theme.layoutName].label}
+                            </Badge>
                           ) : (
                             <span style={{ color: "var(--muted-foreground)" }}>—</span>
                           )}

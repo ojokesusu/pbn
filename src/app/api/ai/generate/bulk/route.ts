@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateArticleWithClaude, generateBackdates } from "@/lib/anthropic";
 import { generateUniqueThemeForGenre } from "@/lib/theme-engine";
+import { pollinationsFromGenre } from "@/lib/pollinations";
 
 // Image keywords per genre for Pexels
 const GENRE_KEYWORDS: Record<string, string[]> = {
@@ -25,6 +26,7 @@ const GENRE_KEYWORDS: Record<string, string[]> = {
   Fotografi: ["photography", "camera", "photo", "lens"],
   Musik: ["music", "guitar", "concert", "piano"],
   Pertanian: ["farming", "agriculture", "garden", "harvest"],
+  iGaming: ["gaming setup", "esports arena", "gaming controller", "cyber tournament"],
 };
 
 async function fetchPexelsImage(genre: string): Promise<string> {
@@ -48,6 +50,32 @@ async function fetchPexelsImage(genre: string): Promise<string> {
     }
   } catch {}
   return `https://picsum.photos/seed/${Math.floor(Math.random() * 800) + 100}/1200/630`;
+}
+
+// Unified image fetcher — iGaming always uses Pollinations; others 50/50 split.
+async function fetchArticleImage(genre: string, title?: string): Promise<string> {
+  if (genre === "iGaming") return pollinationsFromGenre(genre, title);
+  if (Math.random() < 0.5) return pollinationsFromGenre(genre, title);
+  return fetchPexelsImage(genre);
+}
+
+// Inject extra Pollinations images into iGaming article content after <h2> sections.
+function injectExtraImages(content: string, genre: string, title: string): string {
+  if (genre !== "iGaming") return content;
+  const positions: number[] = [];
+  const regex = /<\/h2>/gi;
+  let m;
+  while ((m = regex.exec(content)) !== null) positions.push(m.index + m[0].length);
+  if (positions.length === 0) return content;
+  const count = Math.min(3, positions.length);
+  let result = content;
+  for (let i = count - 1; i >= 0; i--) {
+    const seed = Math.floor(Math.random() * 1_000_000);
+    const url = pollinationsFromGenre("iGaming", `${title} section ${i + 1}`, { seed });
+    const tag = `\n<figure style="margin:2rem 0;text-align:center;"><img src="${url}" alt="${title}" loading="lazy" style="max-width:100%;height:auto;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);" /></figure>\n`;
+    result = result.slice(0, positions[i]) + tag + result.slice(positions[i]);
+  }
+  return result;
 }
 
 function slugify(text: string): string {
@@ -187,8 +215,8 @@ export async function POST(request: NextRequest) {
             });
             if (existing) continue;
 
-            // Fetch featured image
-            const featuredImage = await fetchPexelsImage(genre);
+            // Fetch featured image (iGaming → Pollinations, others → 50/50 Pexels+Pollinations)
+            const featuredImage = await fetchArticleImage(genre, article.title);
 
             // Pick random author
             const authorName = AUTHOR_NAMES[Math.floor(Math.random() * AUTHOR_NAMES.length)];
@@ -196,12 +224,15 @@ export async function POST(request: NextRequest) {
             // Pick category
             const catId = dbCats[catNames[i % catNames.length]];
 
+            // Inject extra inline images for iGaming (image-heavy layout)
+            const enrichedContent = injectExtraImages(article.content, genre, article.title);
+
             // Create article with backdated publishedAt
             await prisma.article.create({
               data: {
                 title: article.title,
                 slug,
-                content: article.content,
+                content: enrichedContent,
                 excerpt: article.excerpt,
                 tags: article.tags,
                 authorName,

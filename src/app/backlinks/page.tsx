@@ -7,6 +7,7 @@ import { Plus, Pencil, Trash2, Link2, Upload, Shuffle, Settings2, Search, Chevro
 import { SidebarInset } from "@/components/ui/sidebar"
 import { useConfirm } from "@/components/ui/confirm-modal"
 import { AppHeader } from "@/components/layout/app-header"
+import { useAdminGuard } from "@/hooks/use-me"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -61,6 +62,7 @@ interface DistroStats {
 export default function BacklinksPage() {
   const confirm = useConfirm()
   const router = useRouter()
+  const { isAdmin, loading: meLoading } = useAdminGuard()
   const [backlinks, setBacklinks] = useState<Backlink[]>([])
   const [loading, setLoading] = useState(true)
   const [distributing, setDistributing] = useState(false)
@@ -189,6 +191,15 @@ export default function BacklinksPage() {
   }
 
   const ds = distroStats?.stats
+
+  if (meLoading || !isAdmin) {
+    return (
+      <SidebarInset>
+        <AppHeader title="Backlink" />
+        <div className="p-6" style={{ background: "var(--background)", minHeight: "100vh" }} />
+      </SidebarInset>
+    )
+  }
 
   return (
     <SidebarInset>

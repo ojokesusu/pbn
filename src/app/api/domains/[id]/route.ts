@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
+
+const MASKED = "******";
 
 export async function GET(
   _request: NextRequest,
@@ -7,6 +10,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const user = await getCurrentUser();
+    const isAdmin = user?.role === "admin";
 
     const domain = await prisma.domain.findUnique({
       where: { id },
@@ -21,6 +26,18 @@ export async function GET(
 
     if (!domain) {
       return NextResponse.json({ error: "Domain not found" }, { status: 404 });
+    }
+
+    // Mask server credentials for non-admin — keep id so relations still work
+    if (!isAdmin && domain.server) {
+      domain.server = {
+        ...domain.server,
+        name: MASKED,
+        nameserver2: MASKED,
+        host: MASKED,
+        username: MASKED,
+        password: MASKED,
+      };
     }
 
     return NextResponse.json(domain);
@@ -51,7 +68,7 @@ export async function PUT(
       data: body,
       include: {
         theme: true,
-        server: { select: { id: true, name: true, host: true } },
+        server: { select: { id: true, label: true, name: true, host: true } },
         _count: {
           select: { articles: true },
         },

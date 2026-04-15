@@ -32,7 +32,9 @@ export default function NewServerPage() {
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
 
   const [form, setForm] = useState({
+    label: "",
     name: "",
+    nameserver2: "",
     host: "",
     username: "",
     password: "",
@@ -83,7 +85,7 @@ export default function NewServerPage() {
     setError("")
 
     if (!form.name.trim()) {
-      setError("Nama server wajib diisi.")
+      setError("Nameserver 1 wajib diisi.")
       return
     }
     if (!form.host.trim()) {
@@ -97,7 +99,9 @@ export default function NewServerPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          label: form.label.trim(),
           name: form.name.trim(),
+          nameserver2: form.nameserver2.trim(),
           host: form.host.trim(),
           username: form.username.trim(),
           password: form.password,
@@ -152,14 +156,16 @@ export default function NewServerPage() {
             </CardHeader>
             <CardContent className="grid gap-6 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="name">Nama Server</Label>
+                <Label htmlFor="label">Label</Label>
                 <Input
-                  id="name"
-                  placeholder="cth. Server Utama PBN"
-                  value={form.name}
-                  onChange={(e) => updateField("name", e.target.value)}
-                  required
+                  id="label"
+                  placeholder="(auto: Server-XXX)"
+                  value={form.label}
+                  onChange={(e) => updateField("label", e.target.value)}
                 />
+                <p className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>
+                  Kosongkan untuk auto-generate. Disarankan pakai format generic (Server-490, Batch-A-01, dll) — jangan tulis nama provider/lokasi.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="host">Host / IP Address</Label>
@@ -169,6 +175,27 @@ export default function NewServerPage() {
                   value={form.host}
                   onChange={(e) => updateField("host", e.target.value)}
                   required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="name">Nameserver 1</Label>
+                <Input
+                  id="name"
+                  placeholder="ns1.example.com"
+                  value={form.name}
+                  onChange={(e) => updateField("name", e.target.value)}
+                  className="font-mono text-sm"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="nameserver2">Nameserver 2</Label>
+                <Input
+                  id="nameserver2"
+                  placeholder="ns2.example.com"
+                  value={form.nameserver2}
+                  onChange={(e) => updateField("nameserver2", e.target.value)}
+                  className="font-mono text-sm"
                 />
               </div>
               <div className="space-y-2">

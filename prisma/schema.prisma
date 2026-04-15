@@ -9,6 +9,7 @@ datasource db {
 
 model Server {
   id              String   @id @default(cuid())
+  label           String   @default("")     // generic display label, e.g. "Server-001" — zero-info, safe to show
   name            String                    // primary nameserver, e.g. ns1.example.com
   nameserver2     String   @default("")     // secondary nameserver, e.g. ns2.example.com
   host            String                    // server IP
