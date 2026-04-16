@@ -24,6 +24,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useConfirm } from "@/components/ui/confirm-modal"
+import { Zap } from "lucide-react"
 import {
   Card,
   CardContent,
@@ -94,6 +96,7 @@ const GENRE_OPTIONS = [
   "Bisnis",
   "Seni & Budaya",
   "Lifestyle",
+  "iGaming",
 ]
 
 interface Domain {
@@ -111,6 +114,7 @@ interface Domain {
   theme: Theme | null
   articles: Article[]
   deployLogs?: DeployLog[]
+  domainSchedule?: { isActive: boolean } | null
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -148,6 +152,7 @@ const deployStatusConfig: Record<string, { icon: typeof CheckCircle2; className:
 export default function DomainDetailPage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
+  const confirm = useConfirm()
   const [domain, setDomain] = useState<Domain | null>(null)
   const [themes, setThemes] = useState<Theme[]>([])
   const [loading, setLoading] = useState(true)
@@ -165,6 +170,7 @@ export default function DomainDetailPage() {
     genre: "",
   })
   const [servers, setServers] = useState<{id: string; name: string; host: string}[]>([])
+  const [activating, setActivating] = useState(false)
 
   useEffect(() => {
     fetchDomain()
@@ -259,6 +265,56 @@ export default function DomainDetailPage() {
     }
   }
 
+  async function handleActivateScheduler() {
+    if (!domain) return
+    if (!domain.serverId) {
+      await confirm({
+        title: "Server belum di-assign",
+        message: "Domain ini belum punya server. Edit dulu domain → pilih/tambah server, baru aktifkan scheduler.",
+        confirmText: "OK",
+      })
+      return
+    }
+    const ok = await confirm({
+      title: "Aktifkan domain di scheduler?",
+      message:
+        `Domain "${domain.name}" akan didaftarkan ke scheduler.\n\n` +
+        `Sistem akan otomatis:\n` +
+        `1. Generate 5 artikel backdated (kalau belum ada)\n` +
+        `2. Deploy ke server\n` +
+        `3. Purge Cloudflare cache + IndexNow\n` +
+        `4. Sebar backlink dari pool\n\n` +
+        `Pertama kali jalan dalam ~10 menit ke depan.`,
+      confirmText: "Aktifkan & Live",
+    })
+    if (!ok) return
+
+    setActivating(true)
+    try {
+      const res = await fetch("/api/scheduler/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "activate", domainIds: [domain.id] }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Gagal aktivasi")
+      await confirm({
+        title: "✓ Aktivasi berhasil",
+        message: `${domain.name} udah aktif di scheduler. Cek lagi 10-20 menit lagi untuk lihat artikel + deploy pertamanya.`,
+        confirmText: "OK",
+      })
+      await fetchDomain()
+    } catch (err) {
+      await confirm({
+        title: "✗ Gagal",
+        message: err instanceof Error ? err.message : "Unknown error",
+        confirmText: "OK",
+      })
+    } finally {
+      setActivating(false)
+    }
+  }
+
   function formatDate(dateStr: string | null) {
     if (!dateStr) return "Belum pernah"
     return new Date(dateStr).toLocaleDateString("id-ID", {
@@ -345,11 +401,30 @@ export default function DomainDetailPage() {
             </div>
           </div>
           {!editing && (
-            <Button variant="outline" onClick={() => setEditing(true)}>
-              <Pencil data-icon="inline-start" />
-              Edit Domain
-
-            </Button>
+            <div className="flex items-center gap-2">
+              {!domain.domainSchedule?.isActive ? (
+                <Button
+                  onClick={handleActivateScheduler}
+                  disabled={activating}
+                  className="rounded-lg shadow-lg"
+                  style={{ background: "linear-gradient(135deg, #10b981, #059669)", color: "#ffffff" }}
+                >
+                  {activating ? (
+                    <><Loader2 className="size-4 mr-1 animate-spin" /> Mengaktifkan...</>
+                  ) : (
+                    <><Zap className="size-4 mr-1" /> Aktifkan & Live</>
+                  )}
+                </Button>
+              ) : (
+                <Badge variant="outline" className="text-xs px-3 py-1.5" style={{ background: "rgba(16,185,129,0.1)", color: "#10b981", borderColor: "rgba(16,185,129,0.3)" }}>
+                  ● Aktif di Scheduler
+                </Badge>
+              )}
+              <Button variant="outline" onClick={() => setEditing(true)}>
+                <Pencil data-icon="inline-start" />
+                Edit Domain
+              </Button>
+            </div>
           )}
         </div>
 

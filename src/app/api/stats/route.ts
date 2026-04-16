@@ -13,6 +13,7 @@ export async function GET() {
       todayArticles, todayDeploys,
       indexedDomains,
       todayBacklinks, totalBacklinkPlacements, backlinkConfig,
+      domainsWithoutSchedule,
     ] = await Promise.all([
       prisma.domain.count(),
       prisma.article.count(),
@@ -39,6 +40,15 @@ export async function GET() {
       prisma.backlinkPlacement.count({ where: { createdAt: { gte: todayStart } } }),
       prisma.backlinkPlacement.count(),
       prisma.backlinkConfig.findFirst({ select: { maxPerDay: true } }),
+      // Domains with NO schedule entry OR schedule is inactive — these are "dormant"
+      prisma.domain.count({
+        where: {
+          OR: [
+            { domainSchedule: null },
+            { domainSchedule: { isActive: false } },
+          ],
+        },
+      }),
     ]);
 
     return NextResponse.json({
@@ -59,6 +69,7 @@ export async function GET() {
       todayBacklinks,
       totalBacklinkPlacements,
       backlinkDailyLimit: backlinkConfig?.maxPerDay ?? 15,
+      domainsWithoutSchedule,
     });
   } catch (error) {
     console.error("Failed to fetch stats:", error);

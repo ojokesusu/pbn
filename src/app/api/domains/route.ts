@@ -11,6 +11,7 @@ export async function GET() {
       include: {
         theme: { select: { id: true, name: true, layoutName: true, isGenerated: true } },
         server: { select: { id: true, label: true, name: true, host: true } },
+        domainSchedule: { select: { isActive: true } },
         _count: {
           select: { articles: true },
         },
@@ -39,6 +40,7 @@ export async function GET() {
       return {
         ...d,
         server: safeServer,
+        schedulerActive: d.domainSchedule?.isActive ?? false,
         wpArticles,
         aiArticles,
         contentSource: wpArticles > 0 && aiArticles > 0

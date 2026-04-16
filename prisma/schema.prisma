@@ -1,26 +1,31 @@
 generator client {
   provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  schemas   = ["pbn"]
 }
 
 model Server {
   id              String   @id @default(cuid())
-  label           String   @default("")     // generic display label, e.g. "Server-001" — zero-info, safe to show
-  name            String                    // primary nameserver, e.g. ns1.example.com
-  nameserver2     String   @default("")     // secondary nameserver, e.g. ns2.example.com
-  host            String                    // server IP
+  label           String   @default("")
+  name            String
+  nameserver2     String   @default("")
+  host            String
   username        String
   password        String
   port            Int      @default(21)
-  status          String   @default("active") // active, inactive, error
+  status          String   @default("active")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   domains         Domain[]
+
+  @@schema("pbn")
 }
 
 model Domain {
@@ -28,19 +33,17 @@ model Domain {
   name            String
   url             String   @unique
   serverId        String?
-  genre           String   @default("") // Teknologi, Kesehatan, Keuangan, etc.
-  status          String   @default("active") // active, inactive, error
+  genre           String   @default("")
+  status          String   @default("active")
   themeId         String?
   lastDeployed    DateTime?
-  // ── Health check fields ──
-  isAlive         Boolean  @default(false)  // domain responds to HTTP
-  httpStatus      Int      @default(0)      // last HTTP status code (200, 404, 500, 0=unreachable)
-  hasWordPress    Boolean  @default(false)  // WordPress REST API detected
-  wpPostCount     Int      @default(0)      // number of posts found via WP REST API
-  lastChecked     DateTime?                 // last health check timestamp
-  // ── Index monitoring fields ──
-  indexStatus     String   @default("unchecked") // unchecked, indexed, not-indexed
-  lastIndexCheck  DateTime?                      // last time someone checked
+  isAlive         Boolean  @default(false)
+  httpStatus      Int      @default(0)
+  hasWordPress    Boolean  @default(false)
+  wpPostCount     Int      @default(0)
+  lastChecked     DateTime?
+  indexStatus     String   @default("unchecked")
+  lastIndexCheck  DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -52,20 +55,22 @@ model Domain {
   backlinkPlacements BacklinkPlacement[]
   schedulerJobs   SchedulerJob[]
   domainSchedule  DomainSchedule?
+
+  @@schema("pbn")
 }
 
 model Theme {
   id              String   @id @default(cuid())
   name            String
-  templateName    String   @default("developer") // developer, flavor, flavor-developer, flavor-developer-developer, developer-developer
+  templateName    String   @default("developer")
   primaryColor    String   @default("#2563eb")
   secondaryColor  String   @default("#1e40af")
   accentColor     String   @default("#f59e0b")
   bgColor         String   @default("#ffffff")
   textColor       String   @default("#111827")
   fontFamily      String   @default("Inter")
-  headerStyle     String   @default("centered") // centered, left-aligned, minimal
-  footerStyle     String   @default("simple")   // simple, detailed, minimal
+  headerStyle     String   @default("centered")
+  footerStyle     String   @default("simple")
   customCss       String   @default("")
   layoutName      String   @default("single-column")
   cssPrefix       String   @default("")
@@ -80,6 +85,8 @@ model Theme {
   updatedAt       DateTime @updatedAt
 
   domains         Domain[]
+
+  @@schema("pbn")
 }
 
 model Category {
@@ -93,6 +100,7 @@ model Category {
   articles        Article[]
 
   @@unique([domainId, slug])
+  @@schema("pbn")
 }
 
 model Article {
@@ -102,10 +110,10 @@ model Article {
   content         String
   excerpt         String   @default("")
   categoryId      String?
-  tags            String   @default("") // comma-separated
+  tags            String   @default("")
   authorName      String   @default("Admin")
   featuredImage   String   @default("")
-  status          String   @default("draft") // draft, published
+  status          String   @default("draft")
   aiSourceUrl     String   @default("")
   domainId        String
   publishedAt     DateTime?
@@ -118,6 +126,7 @@ model Article {
   backlinkPlacements BacklinkPlacement[]
 
   @@unique([domainId, slug])
+  @@schema("pbn")
 }
 
 model Comment {
@@ -129,30 +138,36 @@ model Comment {
   createdAt       DateTime @default(now())
 
   article         Article   @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@schema("pbn")
 }
 
 model DeployLog {
   id              String   @id @default(cuid())
   domainId        String
-  action          String   // deploy, redeploy, theme-update
-  status          String   // success, failed, in-progress
+  action          String
+  status          String
   filesChanged    Int      @default(0)
   message         String   @default("")
   deployedAt      DateTime @default(now())
 
   domain          Domain    @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@schema("pbn")
 }
 
 model Backlink {
   id          String   @id @default(cuid())
-  anchorText  String   @default("") // optional — if empty, system picks random word from article
+  anchorText  String   @default("")
   targetUrl   String
-  type        String   @default("") // MS, MS 2, LP, CN, RTP — label for filtering
-  status      String   @default("active") // active, inactive
+  type        String   @default("")
+  status      String   @default("active")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   placements  BacklinkPlacement[]
+
+  @@schema("pbn")
 }
 
 model BacklinkPlacement {
@@ -160,7 +175,7 @@ model BacklinkPlacement {
   backlinkId    String
   articleId     String
   domainId      String
-  usedAnchor    String   @default("") // the actual anchor text used in this article
+  usedAnchor    String   @default("")
   createdAt     DateTime @default(now())
 
   backlink      Backlink @relation(fields: [backlinkId], references: [id], onDelete: Cascade)
@@ -168,50 +183,55 @@ model BacklinkPlacement {
   domain        Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
 
   @@unique([backlinkId, articleId])
+  @@schema("pbn")
 }
 
 model BacklinkConfig {
   id              String   @id @default(cuid())
-  maxPerDomain    Int      @default(3)    // max backlinks per domain (1-3)
-  maxPerArticle   Int      @default(1)    // max backlinks per article
-  percentArticles Int      @default(30)   // % of articles that get backlinks (20-30)
-  maxPerDay       Int      @default(15)   // max backlinks to distribute per day (anti-spam)
+  maxPerDomain    Int      @default(3)
+  maxPerArticle   Int      @default(1)
+  percentArticles Int      @default(30)
+  maxPerDay       Int      @default(15)
   updatedAt       DateTime @updatedAt
+
+  @@schema("pbn")
 }
 
 model AiConfig {
   id              String   @id @default(cuid())
-  provider        String   // claude, openai
+  provider        String
   apiKey          String
   model           String
   temperature     Float    @default(0.7)
-  contentPattern  String   @default("") // JSON string of content generation patterns
+  contentPattern  String   @default("")
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-}
 
-// ── Automation Scheduler ──
+  @@schema("pbn")
+}
 
 model SchedulerConfig {
   id                  String   @id @default(cuid())
   isRunning           Boolean  @default(false)
-  articlesPerWeek     Int      @default(4)    // articles to generate per domain per week
-  timeWindowStart     Int      @default(6)    // earliest hour (6 = 6:00 AM)
-  timeWindowEnd       Int      @default(23)   // latest hour (23 = 11:00 PM)
-  autoDeploy          Boolean  @default(true) // auto-deploy after generating
-  autoPurgeCache      Boolean  @default(true) // auto-purge Cloudflare cache after deploy
-  initialArticles     Int      @default(5)    // how many articles to generate for a brand new domain (backdated)
-  maxDomainsPerDay    Int      @default(15)   // max domains to process per day
+  articlesPerWeek     Int      @default(4)
+  timeWindowStart     Int      @default(6)
+  timeWindowEnd       Int      @default(23)
+  autoDeploy          Boolean  @default(true)
+  autoPurgeCache      Boolean  @default(true)
+  initialArticles     Int      @default(5)
+  maxDomainsPerDay    Int      @default(15)
   updatedAt           DateTime @updatedAt
+
+  @@schema("pbn")
 }
 
 model SchedulerJob {
   id              String   @id @default(cuid())
   domainId        String
-  type            String   // "generate" | "deploy" | "purge" | "initial-setup"
-  status          String   // "pending" | "running" | "success" | "failed"
-  scheduledAt     DateTime // when this job should run
+  type            String
+  status          String
+  scheduledAt     DateTime
   startedAt       DateTime?
   completedAt     DateTime?
   message         String   @default("")
@@ -220,56 +240,72 @@ model SchedulerJob {
   createdAt       DateTime @default(now())
 
   domain          Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
-}
 
-// ── Notifications ──
+  @@schema("pbn")
+}
 
 model Notification {
   id         String   @id @default(cuid())
-  type       String   // deploy-success, deploy-failed, backlink-placed, article-generated, health-alert, milestone, info
+  type       String
   title      String
   message    String   @default("")
-  link       String   @default("") // optional deep link (e.g. /domains/abc)
-  severity   String   @default("info") // info, success, warning, error
+  link       String   @default("")
+  severity   String   @default("info")
   isRead     Boolean  @default(false)
   createdAt  DateTime @default(now())
 
   @@index([isRead, createdAt])
+  @@schema("pbn")
 }
-
-// ── API Usage (cost tracker) ──
 
 model ApiUsage {
   id            String   @id @default(cuid())
-  provider      String   // "claude" | "openai" | ...
-  model         String   // e.g. "claude-haiku-4-5"
-  operation     String   @default("") // "article-generate" | "title-suggest" | ...
+  provider      String
+  model         String
+  operation     String   @default("")
   inputTokens   Int      @default(0)
   outputTokens  Int      @default(0)
   totalTokens   Int      @default(0)
-  costUsd       Float    @default(0)   // estimated USD cost
-  domainId      String?                // optional: which domain this call was for
-  articleId     String?                // optional: which article this call produced
+  costUsd       Float    @default(0)
+  domainId      String?
+  articleId     String?
   createdAt     DateTime @default(now())
 
   @@index([createdAt])
   @@index([provider, model])
+  @@schema("pbn")
 }
 
-// ── Auth ──
-
 model User {
-  id            String    @id @default(cuid())
-  username      String    @unique
-  passwordHash  String
-  name          String    @default("")
-  role          String    @default("operator") // admin | operator
-  isActive      Boolean   @default(true)
-  lastLoginAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  username          String    @unique
+  passwordHash      String
+  name              String    @default("")
+  role              String    @default("operator")
+  isActive          Boolean   @default(true)
+  lastLoginAt       DateTime?
+  failedLoginCount  Int       @default(0)
+  lockedUntil       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   sessions      Session[]
+
+  @@schema("pbn")
+}
+
+model LoginAttempt {
+  id          String   @id @default(cuid())
+  username    String
+  ip          String
+  userAgent   String   @default("")
+  success     Boolean
+  reason      String   @default("")
+  createdAt   DateTime @default(now())
+
+  @@index([username, createdAt])
+  @@index([ip, createdAt])
+  @@schema("pbn")
 }
 
 model Session {
@@ -282,18 +318,21 @@ model Session {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([token])
+  @@schema("pbn")
 }
 
 model DomainSchedule {
   id              String   @id @default(cuid())
   domainId        String   @unique
-  isActive        Boolean  @default(true)  // is this domain in the scheduler rotation
-  lastGenerated   DateTime?               // last time an article was generated
-  lastDeployedByScheduler DateTime?       // last auto-deploy
-  nextScheduled   DateTime?               // next planned generation
-  totalGenerated  Int      @default(0)     // lifetime articles generated by scheduler
+  isActive        Boolean  @default(true)
+  lastGenerated   DateTime?
+  lastDeployedByScheduler DateTime?
+  nextScheduled   DateTime?
+  totalGenerated  Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   domain          Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@schema("pbn")
 }

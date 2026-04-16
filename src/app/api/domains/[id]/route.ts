@@ -18,6 +18,7 @@ export async function GET(
       include: {
         theme: true,
         server: true,
+        domainSchedule: { select: { isActive: true } },
         articles: {
           orderBy: { createdAt: "desc" },
         },

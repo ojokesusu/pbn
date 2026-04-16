@@ -22,6 +22,7 @@ import {
   XCircle,
   Play,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 
 import { AppHeader } from "@/components/layout/app-header";
@@ -64,6 +65,7 @@ interface Stats {
   todayBacklinks: number;
   totalBacklinkPlacements: number;
   backlinkDailyLimit: number;
+  domainsWithoutSchedule: number;
 }
 
 interface Domain {
@@ -198,14 +200,28 @@ export default function Home() {
   const [taskResult, setTaskResult] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/stats").then((r) => r.json()),
-      fetch("/api/domains").then((r) => r.json()),
-    ]).then(([s, d]) => {
-      setStats(s);
-      setDomains(d);
-      setLoading(false);
-    });
+    const load = () => {
+      Promise.all([
+        fetch("/api/stats").then((r) => r.json()),
+        fetch("/api/domains").then((r) => r.json()),
+      ]).then(([s, d]) => {
+        setStats(s);
+        setDomains(d);
+        setLoading(false);
+      });
+    };
+    load();
+    // Refresh when tab becomes visible again (e.g. after returning from /domains)
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    // Also refresh every 30s so stale banners auto-clear
+    const interval = setInterval(load, 30_000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      clearInterval(interval);
+    };
   }, []);
 
   // Live clock — client-only to avoid hydration mismatch
@@ -352,6 +368,30 @@ export default function Home() {
             <UserMenu />
           </div>
         </div>
+
+        {/* ═══════ Inactive Domains Banner — actionable warning ═══════ */}
+        {stats && stats.domainsWithoutSchedule > 10 && (
+          <Link href="/domains?filter=inactive" className="block rounded-xl border-2 p-4 transition-all hover:shadow-lg" style={{ background: "linear-gradient(135deg, rgba(245,158,11,0.1), rgba(239,68,68,0.05))", borderColor: "rgba(245,158,11,0.4)" }}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(245,158,11,0.2)" }}>
+                  <AlertCircle className="size-6" style={{ color: "#f59e0b" }} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-[color:var(--foreground)]">
+                    🔔 {stats.domainsWithoutSchedule} domain belum aktif di scheduler
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: "var(--muted-foreground)" }}>
+                    Domain ini sudah ada tapi belum di-deploy. Klik buat aktivasi bulk.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm" style={{ background: "#f59e0b", color: "#ffffff" }}>
+                Aktivasi sekarang <ArrowRight className="size-4" />
+              </div>
+            </div>
+          </Link>
+        )}
 
         {/* ═══════ Scheduler Status Banner ═══════ */}
         {stats?.schedulerRunning && (

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
-import { getCurrentUser, hashPassword } from "@/lib/auth"
+import { getCurrentUser, hashPassword, validatePasswordStrength } from "@/lib/auth"
 
 export async function GET() {
   const me = await getCurrentUser()
@@ -33,8 +33,13 @@ export async function POST(req: Request) {
   if (!username || !password) {
     return NextResponse.json({ error: "Username dan password wajib diisi" }, { status: 400 })
   }
-  if (String(password).length < 6) {
-    return NextResponse.json({ error: "Password minimal 6 karakter" }, { status: 400 })
+  // Strong password enforcement for all new users
+  const pwError = validatePasswordStrength(String(password))
+  if (pwError) {
+    return NextResponse.json({ error: pwError }, { status: 400 })
+  }
+  if (String(username).trim().length < 3) {
+    return NextResponse.json({ error: "Username minimal 3 karakter" }, { status: 400 })
   }
 
   const existing = await prisma.user.findUnique({ where: { username: String(username).trim() } })

@@ -12,6 +12,21 @@ export function hashPassword(password: string): string {
   return `${salt}:${derived}`
 }
 
+// Enforce strong password rules for newly created users.
+// Returns null if valid, or an error message string if invalid.
+export function validatePasswordStrength(password: string): string | null {
+  if (password.length < 12) return "Password minimal 12 karakter"
+  if (!/[A-Z]/.test(password)) return "Password harus mengandung huruf besar (A-Z)"
+  if (!/[a-z]/.test(password)) return "Password harus mengandung huruf kecil (a-z)"
+  if (!/[0-9]/.test(password)) return "Password harus mengandung angka (0-9)"
+  if (!/[^A-Za-z0-9]/.test(password)) return "Password harus mengandung simbol (!@#$%, dst)"
+  // Reject common weak patterns
+  const weak = ["password", "123456", "admin", "qwerty", "letmein", "welcome"]
+  const lower = password.toLowerCase()
+  if (weak.some((w) => lower.includes(w))) return "Password terlalu umum/mudah ditebak"
+  return null
+}
+
 export function verifyPassword(password: string, stored: string): boolean {
   const [salt, hash] = stored.split(":")
   if (!salt || !hash) return false

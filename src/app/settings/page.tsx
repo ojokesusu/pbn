@@ -220,9 +220,12 @@ export default function SettingsPage() {
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="min 6 karakter"
+                    placeholder="min 12 karakter"
                     required
                   />
+                  <p className="text-[11px] text-muted-foreground">
+                    Min 12 karakter, harus ada huruf besar, huruf kecil, angka, dan simbol.
+                  </p>
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="u-name">Nama Lengkap</Label>

@@ -22,6 +22,7 @@ import { AppHeader } from "@/components/layout/app-header"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { useConfirm } from "@/components/ui/confirm-modal"
 import {
   Card,
   CardContent,
@@ -62,6 +63,7 @@ interface Domain {
   lastChecked: string | null
   theme: { id: string; name: string; layoutName: string; isGenerated: boolean } | null
   server: { id: string; label: string; name: string; host: string } | null
+  schedulerActive: boolean
   _count: { articles: number }
   wpArticles: number
   aiArticles: number
@@ -87,6 +89,7 @@ type DeployFilter = "" | "deployed" | "not-deployed"
 type HealthFilter = "" | "alive" | "dead" | "unchecked"
 type ContentFilter = "" | "has-articles" | "no-articles" | "wp-only" | "ai-only" | "mixed"
 type TemplateFilter = "" | "magazine" | "blog" | "berita" | "none"
+type SchedulerFilter = "" | "active" | "inactive"
 
 const templateConfig: Record<string, { label: string; bg: string; color: string }> = {
   magazine: { label: "Magazine", bg: "rgba(236,72,153,0.12)", color: "#ec4899" },
@@ -102,6 +105,7 @@ interface SiteCheckResult {
 
 export default function DomainsPage() {
   const router = useRouter()
+  const confirm = useConfirm()
   const [domains, setDomains] = useState<Domain[]>([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -121,6 +125,11 @@ export default function DomainsPage() {
   const [genreFilter, setGenreFilter] = useState("")
   const [contentFilter, setContentFilter] = useState<ContentFilter>("")
   const [templateFilter, setTemplateFilter] = useState<TemplateFilter>("")
+  const [schedulerFilter, setSchedulerFilter] = useState<SchedulerFilter>("")
+
+  // Bulk selection for scheduler activation
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkActivating, setBulkActivating] = useState(false)
 
   const filtered = domains.filter((d) => {
     // Search
@@ -147,6 +156,9 @@ export default function DomainsPage() {
     // Template filter
     if (templateFilter === "none" && d.theme?.layoutName) return false
     if (templateFilter && templateFilter !== "none" && d.theme?.layoutName !== templateFilter) return false
+    // Scheduler filter
+    if (schedulerFilter === "active" && !d.schedulerActive) return false
+    if (schedulerFilter === "inactive" && d.schedulerActive) return false
     return true
   })
   const totalPages = Math.ceil(filtered.length / perPage)
@@ -168,9 +180,11 @@ export default function DomainsPage() {
     magazine: domains.filter((d) => d.theme?.layoutName === "magazine").length,
     blog: domains.filter((d) => d.theme?.layoutName === "blog").length,
     berita: domains.filter((d) => d.theme?.layoutName === "berita").length,
+    schedulerActive: domains.filter((d) => d.schedulerActive).length,
+    schedulerInactive: domains.filter((d) => !d.schedulerActive).length,
   }
 
-  const hasActiveFilters = deployFilter || healthFilter || genreFilter || contentFilter || templateFilter
+  const hasActiveFilters = deployFilter || healthFilter || genreFilter || contentFilter || templateFilter || schedulerFilter
 
   useEffect(() => {
     fetchDomains()
@@ -213,8 +227,111 @@ export default function DomainsPage() {
     setGenreFilter("")
     setContentFilter("")
     setTemplateFilter("")
+    setSchedulerFilter("")
     setSearch("")
     setCurrentPage(1)
+  }
+
+  function toggleSelect(id: string) {
+    // Block toggling for already-active domains — they can't be re-activated
+    const domain = domains.find((d) => d.id === id)
+    if (domain?.schedulerActive) return
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAllVisible() {
+    setSelectedIds((prev) => {
+      // Only select INACTIVE visible domains (skip already-active)
+      const selectableIds = paginated.filter((d) => !d.schedulerActive).map((d) => d.id)
+      const allSelected = selectableIds.length > 0 && selectableIds.every((id) => prev.has(id))
+      const next = new Set(prev)
+      if (allSelected) {
+        for (const id of selectableIds) next.delete(id)
+      } else {
+        for (const id of selectableIds) next.add(id)
+      }
+      return next
+    })
+  }
+
+  function selectAllInactive() {
+    const inactiveIds = filtered.filter((d) => !d.schedulerActive).map((d) => d.id)
+    setSelectedIds(new Set(inactiveIds))
+  }
+
+  async function bulkActivateScheduler() {
+    if (selectedIds.size === 0) return
+
+    // Defensive filter: drop anything that has become active since selection
+    const selectedArr = Array.from(selectedIds)
+    const targetDomains = domains.filter((d) => selectedIds.has(d.id))
+    const inactiveToActivate = targetDomains.filter((d) => !d.schedulerActive).map((d) => d.id)
+    const alreadyActive = targetDomains.length - inactiveToActivate.length
+
+    if (inactiveToActivate.length === 0) {
+      await confirm({
+        title: "Semua sudah aktif",
+        message: `${selectedArr.length} domain yang kamu pilih sudah aktif di scheduler. Nggak perlu aktifkan ulang.`,
+        confirmText: "OK",
+      })
+      setSelectedIds(new Set())
+      return
+    }
+
+    // PBN safety soft warning — recommend max 20/day
+    const isOverRecommended = inactiveToActivate.length > 20
+    const recommendationNote = isOverRecommended
+      ? `\n\n⚠️ REKOMENDASI ANTI-SPAM: Maks 10-20 domain/hari supaya Google nggak deteksi pola burst. Kamu memilih ${inactiveToActivate.length} — boleh lanjut kalau memang butuh, tapi tolong spread beberapa hari kalau bisa.\n`
+      : ""
+
+    const skipNote = alreadyActive > 0 ? `\n(${alreadyActive} domain yg kamu pilih sudah aktif, akan di-skip)\n` : ""
+
+    const ok = await confirm({
+      title: `Aktifkan ${inactiveToActivate.length} domain?`,
+      message:
+        `${inactiveToActivate.length} domain akan didaftarkan ke scheduler dengan jadwal random.${skipNote}\n` +
+        `Setelah aktif, scheduler akan otomatis:\n` +
+        `• Generate artikel pertama (5 artikel backdated kalau belum ada)\n` +
+        `• Deploy ke server\n` +
+        `• Purge Cloudflare cache + IndexNow\n` +
+        `• Sebar backlink dari pool\n` +
+        `\nPertama kali jalan dalam 10-40 menit (di-stagger biar nggak overload).` +
+        recommendationNote,
+      confirmText: `Aktifkan ${inactiveToActivate.length} domain`,
+    })
+    if (!ok) return
+
+    setBulkActivating(true)
+    try {
+      const res = await fetch("/api/scheduler/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "activate", domainIds: inactiveToActivate }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Gagal aktivasi")
+
+      await confirm({
+        title: "✓ Berhasil!",
+        message: `${data.activated} domain udah aktif di scheduler. Bakal mulai jalan dalam beberapa menit ke depan.`,
+        confirmText: "OK",
+      })
+      setSelectedIds(new Set())
+      await fetchDomains()
+    } catch (err) {
+      await confirm({
+        title: "✗ Gagal",
+        message: err instanceof Error ? err.message : "Unknown error",
+        confirmText: "OK",
+      })
+    } finally {
+      setBulkActivating(false)
+    }
   }
 
   async function handleSiteCheck() {
@@ -318,6 +435,36 @@ export default function DomainsPage() {
             <button onClick={() => { resetFilters(); setTemplateFilter("berita"); setCurrentPage(1) }} className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all" style={{ background: templateFilter === "berita" ? "#f59e0b" : "rgba(245,158,11,0.1)", color: templateFilter === "berita" ? "#ffffff" : "#f59e0b" }}>
               Berita ({stats.berita})
             </button>
+            <div className="w-px h-6 self-center mx-1" style={{ background: "var(--border)" }} />
+            <button onClick={() => { resetFilters(); setSchedulerFilter("active"); setCurrentPage(1) }} className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all" style={{ background: schedulerFilter === "active" ? "#10b981" : "rgba(16,185,129,0.1)", color: schedulerFilter === "active" ? "#ffffff" : "#10b981" }}>
+              Scheduler Aktif ({stats.schedulerActive})
+            </button>
+            <button onClick={() => { resetFilters(); setSchedulerFilter("inactive"); setCurrentPage(1) }} className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all" style={{ background: schedulerFilter === "inactive" ? "#ef4444" : "rgba(239,68,68,0.1)", color: schedulerFilter === "inactive" ? "#ffffff" : "#ef4444" }}>
+              Belum Aktif ({stats.schedulerInactive})
+            </button>
+          </div>
+        )}
+
+        {/* Bulk action bar — appears when checkboxes selected */}
+        {selectedIds.size > 0 && (
+          <div className="flex items-center justify-between rounded-xl border p-4 shadow-lg animate-in fade-in slide-in-from-top-2" style={{ background: "linear-gradient(135deg, rgba(14,165,233,0.1), rgba(132,204,22,0.1))", borderColor: "rgba(14,165,233,0.3)" }}>
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg px-2.5 py-1 text-sm font-bold" style={{ background: "#0ea5e9", color: "#ffffff" }}>
+                {selectedIds.size}
+              </div>
+              <span className="text-sm font-medium" style={{ color: "var(--foreground)" }}>domain dipilih</span>
+              <button onClick={() => setSelectedIds(new Set())} className="text-xs underline" style={{ color: "var(--muted-foreground)" }}>
+                clear
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="rounded-lg" style={{ borderColor: "var(--border)", color: "var(--secondary-foreground)" }} onClick={selectAllInactive}>
+                Pilih semua belum aktif
+              </Button>
+              <Button onClick={bulkActivateScheduler} disabled={bulkActivating} className="rounded-lg" style={{ background: "linear-gradient(135deg, #10b981, #059669)", color: "#ffffff" }}>
+                {bulkActivating ? <><Loader2 className="size-4 mr-1 animate-spin" /> Mengaktifkan...</> : `Aktifkan ${selectedIds.size} domain di Scheduler`}
+              </Button>
+            </div>
           </div>
         )}
 
@@ -455,6 +602,18 @@ export default function DomainsPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-b" style={{ borderColor: "var(--border)" }}>
+                    <TableHead className="w-10 py-4">
+                      <input
+                        type="checkbox"
+                        checked={
+                          paginated.filter((d) => !d.schedulerActive).length > 0 &&
+                          paginated.filter((d) => !d.schedulerActive).every((d) => selectedIds.has(d.id))
+                        }
+                        onChange={toggleSelectAllVisible}
+                        className="size-4 rounded cursor-pointer accent-[#0ea5e9]"
+                        title="Select semua yang BELUM aktif di scheduler"
+                      />
+                    </TableHead>
                     <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Nama Domain</TableHead>
                     <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>URL</TableHead>
                     <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Server</TableHead>
@@ -470,16 +629,33 @@ export default function DomainsPage() {
                 <TableBody>
                   {paginated.map((domain) => {
                     const status = statusConfig[domain.status] ?? statusConfig.inactive
+                    const isSelected = selectedIds.has(domain.id)
                     return (
-                      <TableRow key={domain.id} className="transition-colors border-b" style={{ borderColor: "var(--border)" }} onMouseEnter={(e) => e.currentTarget.style.background = "rgba(14,165,233,0.04)"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                      <TableRow key={domain.id} className="transition-colors border-b" style={{ borderColor: "var(--border)", background: isSelected ? "rgba(14,165,233,0.06)" : "transparent" }} onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "rgba(14,165,233,0.04)" }} onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "transparent" }}>
+                        <TableCell className="py-4">
+                          <input
+                            type="checkbox"
+                            checked={domain.schedulerActive ? true : isSelected}
+                            disabled={domain.schedulerActive}
+                            onChange={() => toggleSelect(domain.id)}
+                            className="size-4 rounded accent-[#10b981] disabled:opacity-60 disabled:cursor-not-allowed"
+                            title={domain.schedulerActive ? "Sudah aktif di scheduler" : "Pilih untuk aktivasi"}
+                            style={{ cursor: domain.schedulerActive ? "not-allowed" : "pointer" }}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium py-4" style={{ color: "var(--secondary-foreground)" }}>
-                          <Link
-                            href={`/domains/${domain.id}`}
-                            className="hover:underline"
-                            style={{ color: "var(--secondary-foreground)" }}
-                          >
-                            {domain.name}
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            <Link
+                              href={`/domains/${domain.id}`}
+                              className="hover:underline"
+                              style={{ color: "var(--secondary-foreground)" }}
+                            >
+                              {domain.name}
+                            </Link>
+                            {domain.schedulerActive && (
+                              <span title="Aktif di scheduler" className="size-1.5 rounded-full" style={{ background: "#10b981", boxShadow: "0 0 6px rgba(16,185,129,0.6)" }} />
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="py-4">
                           <a
