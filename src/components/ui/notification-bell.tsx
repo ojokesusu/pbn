@@ -65,8 +65,19 @@ export function NotificationBell() {
   useEffect(() => {
     load()
     const interval = setInterval(load, 30_000) // poll every 30s
-    return () => clearInterval(interval)
+    // Listen for cross-bell sync events so multiple bells stay in sync
+    const handler = () => load()
+    window.addEventListener("notifications-updated", handler)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("notifications-updated", handler)
+    }
   }, [load])
+
+  // Notify all other bell instances that notifications changed
+  const broadcast = useCallback(() => {
+    window.dispatchEvent(new CustomEvent("notifications-updated"))
+  }, [])
 
   // Close on outside click
   useEffect(() => {
@@ -81,17 +92,20 @@ export function NotificationBell() {
 
   async function markAllRead() {
     await fetch("/api/notifications", { method: "POST" })
+    broadcast()
     load()
   }
 
   async function clearRead() {
     await fetch("/api/notifications", { method: "DELETE" })
+    broadcast()
     load()
   }
 
   async function onClickItem(n: Notification) {
     if (!n.isRead) {
       await fetch(`/api/notifications/${n.id}`, { method: "PATCH" })
+      broadcast()
     }
     setOpen(false)
     if (n.link) router.push(n.link)
