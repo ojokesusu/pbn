@@ -71,7 +71,33 @@ export default function SchedulerPage() {
     if (!data) return
     const newState = !data.config.isRunning
     if (newState) {
-      const ok = await confirm({ message: "Mulai scheduler?\n\nSistem akan otomatis:\n1. Generate artikel (Claude AI)\n2. Deploy ke server (FTP)\n3. Purge cache (Cloudflare)\n4. Submit ke IndexNow (Bing)\n5. Sebar backlink (prioritas MS → MS 2 → LP → RTP → CN)\n6. Cek milestone & kirim notifikasi\n\nSemua berjalan di server, tanpa buka browser." })
+      const ok = await confirm({
+        title: "Mulai scheduler?",
+        message:
+          "Sistem akan otomatis:\n" +
+          "1. Generate artikel (Claude AI)\n" +
+          "2. Deploy ke server (FTP)\n" +
+          "3. Purge cache (Cloudflare)\n" +
+          "4. Submit ke IndexNow (Bing)\n" +
+          "5. Sebar backlink (prioritas MS → MS 2 → LP → RTP → CN)\n" +
+          "6. Cek milestone & kirim notifikasi\n\n" +
+          "Semua berjalan di server, tanpa buka browser.",
+        confirmText: "Ya, mulai",
+      })
+      if (!ok) return
+    } else {
+      const ok = await confirm({
+        title: "⚠️ Hentikan scheduler?",
+        message:
+          "Semua domain akan BERHENTI auto-generate artikel + deploy.\n\n" +
+          "Dampak:\n" +
+          "• Nggak ada artikel baru yang ke-publish\n" +
+          "• Nggak ada deploy otomatis\n" +
+          "• Backlink nggak tersebar\n\n" +
+          "Kamu bisa nyalain lagi kapan aja, tapi Google mungkin nge-notice kalau pattern publishing tiba-tiba berhenti.",
+        confirmText: "Ya, hentikan",
+        variant: "danger",
+      })
       if (!ok) return
     }
     await fetch("/api/scheduler", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isRunning: newState }) })

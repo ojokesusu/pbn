@@ -282,6 +282,7 @@ model User {
   passwordHash      String
   name              String    @default("")
   role              String    @default("operator")
+  avatarId          String    @default("")     // preset avatar id, e.g. "fox", "gamepad"
   isActive          Boolean   @default(true)
   lastLoginAt       DateTime?
   failedLoginCount  Int       @default(0)

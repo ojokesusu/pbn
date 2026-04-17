@@ -138,20 +138,40 @@ export default function SettingsPage() {
   }
 
   async function handleDelete(user: UserRow) {
+    const isSelf = me?.id === user.id
     const ok = await confirm({
-      title: "Hapus user?",
-      message: `User "${user.username}" akan dihapus permanen.`,
-      confirmText: "Hapus",
+      title: isSelf ? "⚠️ Hapus akun KAMU SENDIRI?" : "Hapus user?",
+      message: isSelf
+        ? `Ini akun kamu sendiri ("${user.username}")!\n\nKalau dihapus:\n• Kamu auto-logout\n• Kamu nggak bisa login lagi\n• Data login history hilang\n\nLebih baik nonaktifkan dulu (toggle status), jangan hapus.`
+        : `User "${user.username}" (${user.name || "-"}) akan dihapus permanen.\n\n• Semua session login dia akan invalid\n• Log aktivitas dia tetap tersimpan\n• Tindakan ini TIDAK BISA di-undo`,
+      confirmText: isSelf ? "Ya, hapus akun saya" : "Hapus user",
       variant: "danger",
     })
     if (!ok) return
+
+    // Double-confirm for self-deletion
+    if (isSelf) {
+      const reallyOk = await confirm({
+        title: "Beneran yakin?",
+        message: `Satu klik lagi dan akun "${user.username}" akan HILANG SELAMANYA. Nggak ada cara balikin.`,
+        confirmText: "Ya, saya paham, hapus",
+        variant: "danger",
+      })
+      if (!reallyOk) return
+    }
+
     const res = await fetch(`/api/auth/users/${user.id}`, { method: "DELETE" })
     if (res.ok) {
-      alert("User dihapus")
+      if (isSelf) {
+        await fetch("/api/auth/logout", { method: "POST" })
+        router.push("/login")
+        return
+      }
+      await confirm({ title: "✓ Berhasil", message: "User dihapus.", confirmText: "OK" })
       loadUsers()
     } else {
       const data = await res.json().catch(() => ({}))
-      alert(data.error || "Gagal menghapus")
+      await confirm({ title: "✗ Gagal", message: data.error || "Gagal menghapus user", confirmText: "OK" })
     }
   }
 

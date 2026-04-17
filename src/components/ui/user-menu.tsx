@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { LogOut, Settings, Shield, User as UserIcon } from "lucide-react"
 import { useMe } from "@/hooks/use-me"
+import { AvatarDisplay } from "@/components/ui/avatar-display"
+import { useConfirm } from "@/components/ui/confirm-modal"
 
 export function UserMenu() {
   const router = useRouter()
+  const confirm = useConfirm()
   const { me } = useMe()
   const [open, setOpen] = useState(false)
 
@@ -33,14 +36,19 @@ export function UserMenu() {
   }, [open])
 
   async function handleLogout() {
+    setOpen(false)
+    const ok = await confirm({
+      title: "Yakin mau keluar?",
+      message: "Kamu akan logout dan harus login ulang.",
+      confirmText: "Ya, keluar",
+      variant: "danger",
+    })
+    if (!ok) return
     await fetch("/api/auth/logout", { method: "POST" })
     router.push("/login")
     router.refresh()
   }
 
-  const initial = me
-    ? (me.name || me.username).charAt(0).toUpperCase()
-    : null
   const isAdmin = me?.role === "admin"
 
   return (
@@ -51,18 +59,25 @@ export function UserMenu() {
           e.stopPropagation()
           setOpen((v) => !v)
         }}
-        className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white select-none transition-all hover:scale-105 hover:shadow-lg"
+        className="rounded-full select-none transition-all hover:scale-105 hover:shadow-lg"
         style={{
-          background: isAdmin
-            ? "linear-gradient(135deg, #0ea5e9, #84cc16)"
-            : "linear-gradient(135deg, #64748b, #475569)",
-          boxShadow: open
-            ? "0 0 0 3px rgba(14,165,233,0.25)"
-            : undefined,
+          boxShadow: open ? "0 0 0 3px rgba(14,165,233,0.25)" : undefined,
         }}
         title={me ? `${me.name || me.username} (${me.role})` : "Profil"}
       >
-        {initial ?? <UserIcon className="size-4" />}
+        {me ? (
+          <AvatarDisplay
+            avatarId={me.avatarId}
+            name={me.name}
+            username={me.username}
+            role={me.role}
+            size="md"
+          />
+        ) : (
+          <div className="w-9 h-9 rounded-full bg-slate-400 flex items-center justify-center">
+            <UserIcon className="size-4 text-white" />
+          </div>
+        )}
       </button>
 
       {open && me && (
@@ -79,16 +94,13 @@ export function UserMenu() {
               borderBottom: "1px solid var(--border)",
             }}
           >
-            <div
-              className="w-11 h-11 rounded-full flex items-center justify-center text-base font-bold text-white shrink-0"
-              style={{
-                background: isAdmin
-                  ? "linear-gradient(135deg, #0ea5e9, #84cc16)"
-                  : "linear-gradient(135deg, #64748b, #475569)",
-              }}
-            >
-              {initial}
-            </div>
+            <AvatarDisplay
+              avatarId={me.avatarId}
+              name={me.name}
+              username={me.username}
+              role={me.role}
+              size="lg"
+            />
             <div className="min-w-0 flex-1">
               <p
                 className="text-sm font-semibold truncate"
@@ -118,6 +130,17 @@ export function UserMenu() {
 
           {/* Menu items */}
           <div className="py-1">
+            {/* Profile (everyone can edit own profile) */}
+            <Link
+              href="/profile"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+              style={{ color: "var(--foreground)" }}
+            >
+              <UserIcon className="size-4" style={{ color: "var(--muted-foreground)" }} />
+              <span className="flex-1">Profil Saya</span>
+            </Link>
+
             {isAdmin && (
               <Link
                 href="/settings"

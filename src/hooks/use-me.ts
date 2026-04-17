@@ -8,6 +8,7 @@ export type Me = {
   username: string
   name: string
   role: "admin" | "operator"
+  avatarId?: string
 }
 
 export function useMe() {
