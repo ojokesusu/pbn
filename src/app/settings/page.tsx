@@ -232,14 +232,20 @@ export default function SettingsPage() {
                 <UserPlus className="size-5 text-teal-600" />
                 <h2 className="text-base font-semibold">Tambah User Baru</h2>
               </div>
-              <form onSubmit={handleCreate} className="grid gap-3 md:grid-cols-5">
+              <form onSubmit={handleCreate} className="grid gap-3 md:grid-cols-5" autoComplete="off">
+                {/* Honeypot fields to defeat Chrome/Firefox aggressive autofill */}
+                <input type="text" name="fake-user" autoComplete="username" style={{ display: "none" }} tabIndex={-1} aria-hidden="true" readOnly />
+                <input type="password" name="fake-pass" autoComplete="current-password" style={{ display: "none" }} tabIndex={-1} aria-hidden="true" readOnly />
+
                 <div className="space-y-1">
                   <Label htmlFor="u-username">Username</Label>
                   <Input
                     id="u-username"
+                    name="new-user-username-pbn"
                     value={newUsername}
                     onChange={(e) => setNewUsername(e.target.value)}
                     placeholder="budi"
+                    autoComplete="off"
                     required
                   />
                 </div>
@@ -248,11 +254,13 @@ export default function SettingsPage() {
                   <div className="relative">
                     <Input
                       id="u-password"
+                      name="new-user-password-pbn"
                       type={showNewPassword ? "text" : "password"}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="min 12 karakter"
                       className="pr-10"
+                      autoComplete="new-password"
                       required
                     />
                     <button
@@ -274,11 +282,13 @@ export default function SettingsPage() {
                   <div className="relative">
                     <Input
                       id="u-password-confirm"
+                      name="new-user-password-confirm-pbn"
                       type={showNewPassword ? "text" : "password"}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="ulangi password di atas"
                       className="pr-10"
+                      autoComplete="new-password"
                       required
                     />
                     {confirmPassword.length > 0 && (
