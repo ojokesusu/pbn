@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { LogIn, Lock, User, Loader2 } from "lucide-react"
+import { LogIn, Lock, User, Loader2, Eye, EyeOff } from "lucide-react"
 
 function LoginForm() {
   const router = useRouter()
@@ -14,6 +14,7 @@ function LoginForm() {
 
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -103,14 +104,24 @@ function LoginForm() {
                 />
                 <Input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="pl-9"
+                  className="pl-9 pr-10"
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  tabIndex={-1}
+                  aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-slate-100 transition-colors"
+                  style={{ color: "#64748b" }}
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
               </div>
             </div>
 
@@ -147,18 +158,6 @@ function LoginForm() {
             </Button>
           </form>
 
-          <div
-            className="mt-6 rounded-lg border px-3 py-2 text-xs"
-            style={{ background: "#f8fafc", borderColor: "#e2e8f0", color: "#64748b" }}
-          >
-            <div className="font-semibold mb-0.5" style={{ color: "#334155" }}>
-              Default login pertama kali:
-            </div>
-            username: <b>admin</b> · password: <b>admin123</b>
-            <div className="mt-1" style={{ color: "#94a3b8" }}>
-              Ganti password segera setelah masuk.
-            </div>
-          </div>
         </div>
       </div>
     </div>

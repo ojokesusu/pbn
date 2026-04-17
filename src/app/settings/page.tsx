@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Shield, UserPlus, Trash2, Users, DollarSign, TrendingUp, Zap } from "lucide-react"
+import { Shield, UserPlus, Trash2, Users, DollarSign, TrendingUp, Zap, Eye, EyeOff, Check, X } from "lucide-react"
 
 type UserRow = {
   id: string
@@ -67,9 +67,13 @@ export default function SettingsPage() {
   // New user form
   const [newUsername, setNewUsername] = useState("")
   const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [showNewPassword, setShowNewPassword] = useState(false)
   const [newName, setNewName] = useState("")
   const [newRole, setNewRole] = useState<"admin" | "operator">("operator")
   const [creating, setCreating] = useState(false)
+  const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword
+  const passwordsMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword
 
   useEffect(() => {
     if (loading) return
@@ -99,6 +103,10 @@ export default function SettingsPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
+    if (newPassword !== confirmPassword) {
+      alert("Password dan konfirmasi tidak cocok")
+      return
+    }
     setCreating(true)
     try {
       const res = await fetch("/api/auth/users", {
@@ -119,6 +127,8 @@ export default function SettingsPage() {
       alert(`User ${data.user.username} berhasil dibuat`)
       setNewUsername("")
       setNewPassword("")
+      setConfirmPassword("")
+      setShowNewPassword(false)
       setNewName("")
       setNewRole("operator")
       loadUsers()
@@ -215,17 +225,62 @@ export default function SettingsPage() {
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="u-password">Password</Label>
-                  <Input
-                    id="u-password"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="min 12 karakter"
-                    required
-                  />
+                  <div className="relative">
+                    <Input
+                      id="u-password"
+                      type={showNewPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="min 12 karakter"
+                      className="pr-10"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword((v) => !v)}
+                      tabIndex={-1}
+                      aria-label={showNewPassword ? "Sembunyikan password" : "Tampilkan password"}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted transition-colors text-muted-foreground"
+                    >
+                      {showNewPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
                   <p className="text-[11px] text-muted-foreground">
                     Min 12 karakter, harus ada huruf besar, huruf kecil, angka, dan simbol.
                   </p>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="u-password-confirm">Konfirmasi Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="u-password-confirm"
+                      type={showNewPassword ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="ulangi password di atas"
+                      className="pr-10"
+                      required
+                    />
+                    {confirmPassword.length > 0 && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                        {passwordsMatch ? (
+                          <Check className="size-4" style={{ color: "#10b981" }} />
+                        ) : (
+                          <X className="size-4" style={{ color: "#ef4444" }} />
+                        )}
+                      </span>
+                    )}
+                  </div>
+                  {passwordsMismatch && (
+                    <p className="text-[11px]" style={{ color: "#ef4444" }}>
+                      Password tidak cocok dengan yang di atas
+                    </p>
+                  )}
+                  {passwordsMatch && (
+                    <p className="text-[11px]" style={{ color: "#10b981" }}>
+                      ✓ Password cocok
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="u-name">Nama Lengkap</Label>
