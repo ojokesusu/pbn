@@ -24,6 +24,8 @@ import {
   Activity,
 } from "lucide-react"
 import { useMe } from "@/hooks/use-me"
+import { AvatarDisplay } from "@/components/ui/avatar-display"
+import { useConfirm } from "@/components/ui/confirm-modal"
 
 import {
   Sidebar,
@@ -192,6 +194,7 @@ export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { me } = useMe()
+  const confirm = useConfirm()
 
   const [stats, setStats] = useState<SidebarStats | null>(null)
   const [clock, setClock] = useState<string | null>(null)
@@ -234,6 +237,13 @@ export function AppSidebar() {
   )
 
   async function handleLogout() {
+    const ok = await confirm({
+      title: "Yakin mau keluar?",
+      message: "Kamu akan logout dan harus login ulang.",
+      confirmText: "Ya, keluar",
+      variant: "danger",
+    })
+    if (!ok) return
     await fetch("/api/auth/logout", { method: "POST" })
     router.push("/login")
     router.refresh()
@@ -473,29 +483,32 @@ export function AppSidebar() {
 
           <SidebarSeparator className="mx-0 my-1 bg-[color:var(--border)]" />
 
-          {/* Current user */}
+          {/* Current user — clickable, goes to profile page */}
           <SidebarMenuItem>
             <SidebarMenuButton
-              tooltip={me ? `${me.name || me.username} (${me.role})` : "Profil"}
-              className="rounded-lg text-[color:var(--muted-foreground)] pointer-events-none"
+              tooltip={me ? `${me.name || me.username} (${me.role}) — klik untuk edit profil` : "Profil"}
+              render={<Link href="/profile" />}
+              className="rounded-lg text-[color:var(--muted-foreground)] transition-all duration-200 ease-out hover:bg-[rgba(14,165,233,0.08)] hover:text-[#0ea5e9] cursor-pointer"
             >
-              <span
-                className="flex shrink-0 items-center justify-center rounded-full size-5 ring-1 ring-[color:var(--border)] text-[10px] font-bold text-white"
-                style={{
-                  background:
-                    me?.role === "admin"
-                      ? "linear-gradient(135deg, #0ea5e9, #0284c7)"
-                      : "linear-gradient(135deg, #64748b, #475569)",
-                }}
-              >
-                {me ? (
-                  (me.name || me.username).charAt(0).toUpperCase()
-                ) : (
-                  <User className="size-3" />
-                )}
-              </span>
+              {me ? (
+                <AvatarDisplay
+                  avatarId={me.avatarId}
+                  name={me.name}
+                  username={me.username}
+                  role={me.role}
+                  size="sm"
+                  className="!w-5 !h-5"
+                />
+              ) : (
+                <span
+                  className="flex shrink-0 items-center justify-center rounded-full size-5 ring-1 ring-[color:var(--border)]"
+                  style={{ background: "var(--muted)" }}
+                >
+                  <User className="size-3" style={{ color: "var(--muted-foreground)" }} />
+                </span>
+              )}
               <span className="text-xs truncate">
-                {me ? me.name || me.username : "..."}
+                {me ? me.name || me.username : "Loading..."}
                 {me && (
                   <span className="ml-1 text-[9px] opacity-60 uppercase">
                     {me.role}
