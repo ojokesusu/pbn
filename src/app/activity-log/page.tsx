@@ -45,7 +45,29 @@ type LoginAttempt = {
   userAgent: string
   success: boolean
   reason: string
+  country: string
+  countryCode: string
+  city: string
+  region: string
   createdAt: string
+}
+
+// ISO 3166-1 alpha-2 → flag emoji (regional indicator symbols).
+function flagEmoji(code: string): string {
+  if (!code || code.length !== 2) return ""
+  const chars = [...code.toUpperCase()].map((c) => 127397 + c.charCodeAt(0))
+  return String.fromCodePoint(...chars)
+}
+
+function locationLabel(a: LoginAttempt): { flag: string; primary: string; secondary: string } {
+  if (a.country === "Local") return { flag: "🏠", primary: "Local", secondary: "" }
+  if (!a.country && !a.city) return { flag: "", primary: "—", secondary: "" }
+  const parts = [a.city, a.region].filter((p) => p && p !== a.country)
+  return {
+    flag: flagEmoji(a.countryCode),
+    primary: a.country || "Unknown",
+    secondary: parts.join(", "),
+  }
 }
 
 type ApiResponse = {
@@ -532,6 +554,12 @@ export default function ActivityLogPage() {
                         className="text-xs uppercase tracking-wider py-4"
                         style={{ color: "var(--muted-foreground)" }}
                       >
+                        Lokasi
+                      </TableHead>
+                      <TableHead
+                        className="text-xs uppercase tracking-wider py-4"
+                        style={{ color: "var(--muted-foreground)" }}
+                      >
                         Device
                       </TableHead>
                     </TableRow>
@@ -539,6 +567,7 @@ export default function ActivityLogPage() {
                   <TableBody>
                     {items.map((a) => {
                       const device = parseDevice(a.userAgent)
+                      const loc = locationLabel(a)
                       return (
                         <TableRow
                           key={a.id}
@@ -612,6 +641,31 @@ export default function ActivityLogPage() {
                             >
                               {a.ip || "—"}
                             </span>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {loc.flag && (
+                                <span className="text-base leading-none shrink-0">
+                                  {loc.flag}
+                                </span>
+                              )}
+                              <div className="min-w-0">
+                                <div
+                                  className="text-xs font-medium truncate"
+                                  style={{ color: "var(--foreground)" }}
+                                >
+                                  {loc.primary}
+                                </div>
+                                {loc.secondary && (
+                                  <div
+                                    className="text-[10px] truncate"
+                                    style={{ color: "var(--muted-foreground)" }}
+                                  >
+                                    {loc.secondary}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </TableCell>
                           <TableCell className="py-3">
                             <div className="flex items-center gap-1.5">

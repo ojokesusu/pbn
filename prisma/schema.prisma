@@ -302,6 +302,10 @@ model LoginAttempt {
   userAgent   String   @default("")
   success     Boolean
   reason      String   @default("")
+  country     String   @default("")
+  countryCode String   @default("")
+  city        String   @default("")
+  region      String   @default("")
   createdAt   DateTime @default(now())
 
   @@index([username, createdAt])
