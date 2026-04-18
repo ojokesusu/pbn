@@ -118,28 +118,28 @@ export default function ArticlesPage() {
   return (
     <SidebarInset>
       <AppHeader title="Artikel" />
-      <div className="p-6" style={{ background: "var(--background)", minHeight: "100vh" }}>
-        <div className="flex items-center justify-between mb-6">
+      <div className="p-3 md:p-6" style={{ background: "var(--background)", minHeight: "100vh" }}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 md:mb-6">
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-extrabold tracking-tight" style={{ color: "var(--foreground)" }}>Artikel</h2>
+            <h2 className="text-xl md:text-2xl font-extrabold tracking-tight" style={{ color: "var(--foreground)" }}>Artikel</h2>
             <Badge variant="secondary" className="border-0" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>{articles.length}</Badge>
           </div>
           <div className="flex items-center gap-2">
             <Button
-              className="bg-gradient-to-r from-[#0ea5e9] to-[#8b5cf6] hover:from-[#0284c7] hover:to-[#7c3aed] text-white rounded-lg shadow-lg transition-all"
+              className="bg-gradient-to-r from-[#0ea5e9] to-[#8b5cf6] hover:from-[#0284c7] hover:to-[#7c3aed] text-white rounded-lg shadow-lg transition-all flex-1 sm:flex-initial"
               onClick={() => router.push("/articles/ai-generate")}
             >
               <Sparkles className="size-4 mr-1" />
               AI Generate
             </Button>
-            <Button className="bg-[#0ea5e9] hover:bg-[#0284c7] text-white rounded-lg shadow-lg shadow-[#0ea5e9]/20 transition-all" onClick={() => router.push("/articles/new")}>
+            <Button className="bg-[#0ea5e9] hover:bg-[#0284c7] text-white rounded-lg shadow-lg shadow-[#0ea5e9]/20 transition-all flex-1 sm:flex-initial" onClick={() => router.push("/articles/new")}>
               <Plus className="size-4 mr-1" />
               Artikel Baru
             </Button>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4" style={{ color: "var(--muted-foreground)" }} />
             <Input
@@ -154,7 +154,7 @@ export default function ArticlesPage() {
             value={selectedDomainId}
             onValueChange={(val) => { setSelectedDomainId(val === "__all__" ? "" : (val ?? "")); setCurrentPage(1) }}
           >
-            <SelectTrigger className="w-[220px] rounded-lg" style={{ background: "var(--card)", borderColor: "var(--border)", color: "var(--secondary-foreground)" }}>
+            <SelectTrigger className="w-full sm:w-[220px] rounded-lg" style={{ background: "var(--card)", borderColor: "var(--border)", color: "var(--secondary-foreground)" }}>
               <SelectValue placeholder="Semua Domain" />
             </SelectTrigger>
             <SelectContent style={{ background: "var(--card)", borderColor: "var(--border)" }}>
@@ -196,7 +196,65 @@ export default function ArticlesPage() {
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border shadow-lg" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+          <>
+          {/* ─── Mobile card view (< md) ─── */}
+          <div className="md:hidden space-y-2.5">
+            {paginated.map((article) => (
+              <div
+                key={article.id}
+                className="rounded-lg border p-3"
+                style={{ borderColor: "var(--border)", background: "var(--card)" }}
+              >
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <button
+                      onClick={() => router.push(`/articles/${article.id}`)}
+                      className="font-semibold text-sm text-left hover:underline line-clamp-2"
+                      style={{ color: "var(--foreground)" }}
+                    >
+                      {article.title}
+                    </button>
+                  </div>
+                  <div className="flex shrink-0 gap-0.5">
+                    <Button variant="ghost" size="icon-sm" className="hover:bg-[rgba(14,165,233,0.1)]" style={{ color: "var(--muted-foreground)" }} onClick={() => router.push(`/articles/${article.id}`)}>
+                      <Pencil className="size-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" className="text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => handleDelete(article.id)}>
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <Badge
+                    variant="outline"
+                    className={
+                      article.status === "published"
+                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/25 text-[10px]"
+                        : "bg-yellow-500/15 text-yellow-400 border-yellow-500/25 text-[10px]"
+                    }
+                  >
+                    {article.status === "published" ? "Terbit" : "Draf"}
+                  </Badge>
+                  {article.category?.name && (
+                    <Badge variant="outline" className="text-[10px] border-0" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>
+                      {article.category.name}
+                    </Badge>
+                  )}
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
+                  <span className="truncate" style={{ color: "var(--muted-foreground)" }}>
+                    {article.domain?.name ?? "—"}
+                  </span>
+                  <span className="shrink-0" style={{ color: "var(--muted-foreground)" }}>
+                    {formatDate(article.publishedAt)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* ─── Desktop table view (>= md) ─── */}
+          <div className="hidden md:block rounded-xl border shadow-lg" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
             <Table>
               <TableHeader>
                 <TableRow className="border-b" style={{ borderColor: "var(--border)" }}>
@@ -254,34 +312,35 @@ export default function ArticlesPage() {
                 ))}
               </TableBody>
             </Table>
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t" style={{ borderColor: "var(--border)" }}>
-                <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-                  Menampilkan {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, filtered.length)} dari {filtered.length}
-                </p>
-                <div className="flex items-center gap-1">
-                  <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)} className="h-8 w-8 p-0" style={{ borderColor: "var(--border)" }}>
-                    <ChevronLeft className="size-4" />
-                  </Button>
-                  {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                    let page: number
-                    if (totalPages <= 7) { page = i + 1 }
-                    else if (currentPage <= 4) { page = i + 1 }
-                    else if (currentPage >= totalPages - 3) { page = totalPages - 6 + i }
-                    else { page = currentPage - 3 + i }
-                    return (
-                      <Button key={page} variant={currentPage === page ? "default" : "outline"} size="sm" onClick={() => setCurrentPage(page)} className={`h-8 w-8 p-0 ${currentPage === page ? "bg-[#0ea5e9] text-white hover:bg-[#0284c7]" : ""}`} style={currentPage !== page ? { borderColor: "var(--border)", color: "var(--secondary-foreground)" } : {}}>
-                        {page}
-                      </Button>
-                    )
-                  })}
-                  <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="h-8 w-8 p-0" style={{ borderColor: "var(--border)" }}>
-                    <ChevronRight className="size-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
           </div>
+          {totalPages > 1 && (
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between px-1 md:px-4 py-3 mt-3 md:mt-0 md:border-t rounded-lg md:rounded-none" style={{ borderColor: "var(--border)" }}>
+              <p className="text-xs md:text-sm" style={{ color: "var(--muted-foreground)" }}>
+                Menampilkan {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, filtered.length)} dari {filtered.length}
+              </p>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)} className="h-8 w-8 p-0" style={{ borderColor: "var(--border)" }}>
+                  <ChevronLeft className="size-4" />
+                </Button>
+                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                  let page: number
+                  if (totalPages <= 7) { page = i + 1 }
+                  else if (currentPage <= 4) { page = i + 1 }
+                  else if (currentPage >= totalPages - 3) { page = totalPages - 6 + i }
+                  else { page = currentPage - 3 + i }
+                  return (
+                    <Button key={page} variant={currentPage === page ? "default" : "outline"} size="sm" onClick={() => setCurrentPage(page)} className={`h-8 w-8 p-0 ${currentPage === page ? "bg-[#0ea5e9] text-white hover:bg-[#0284c7]" : ""}`} style={currentPage !== page ? { borderColor: "var(--border)", color: "var(--secondary-foreground)" } : {}}>
+                      {page}
+                    </Button>
+                  )
+                })}
+                <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="h-8 w-8 p-0" style={{ borderColor: "var(--border)" }}>
+                  <ChevronRight className="size-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </div>
     </SidebarInset>

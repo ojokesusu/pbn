@@ -221,11 +221,11 @@ export default function ServersPage() {
   return (
     <SidebarInset>
       <AppHeader title="Server" />
-      <div className="flex-1 space-y-6 p-6" style={{ background: "var(--background)", minHeight: "100vh" }}>
-        <div className="flex items-center justify-between">
+      <div className="flex-1 space-y-4 md:space-y-6 p-3 md:p-6" style={{ background: "var(--background)", minHeight: "100vh" }}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-2xl font-extrabold tracking-tight" style={{ color: "var(--foreground)" }}>Server</h2>
-            <p style={{ color: "var(--muted-foreground)" }}>
+            <h2 className="text-xl md:text-2xl font-extrabold tracking-tight" style={{ color: "var(--foreground)" }}>Server</h2>
+            <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
               Kelola server cPanel untuk jaringan PBN Anda.
             </p>
           </div>
@@ -233,7 +233,7 @@ export default function ServersPage() {
             <Button
               onClick={handleSyncCloudflare}
               disabled={syncing}
-              className="rounded-lg shadow-lg"
+              className="rounded-lg shadow-lg flex-1 sm:flex-initial"
               style={{
                 background: "linear-gradient(135deg, #f6821f, #f38020)",
                 color: "#ffffff",
@@ -253,7 +253,7 @@ export default function ServersPage() {
                 </>
               )}
             </Button>
-            <Button className="bg-[#0ea5e9] hover:bg-[#0284c7] text-white rounded-lg shadow-lg shadow-[#0ea5e9]/20 transition-all" onClick={() => router.push("/servers/new")}>
+            <Button className="bg-[#0ea5e9] hover:bg-[#0284c7] text-white rounded-lg shadow-lg shadow-[#0ea5e9]/20 transition-all flex-1 sm:flex-initial" onClick={() => router.push("/servers/new")}>
               <Plus className="h-4 w-4 mr-1" />
               Tambah Server
             </Button>
@@ -323,6 +323,77 @@ export default function ServersPage() {
               </div>
             ) : (
               <>
+              {/* ─── Mobile card view (< md) ─── */}
+              <div className="md:hidden space-y-2.5">
+                {paginated.map((server) => {
+                  const status = statusConfig[server.status] ?? statusConfig.inactive
+                  return (
+                    <div
+                      key={server.id}
+                      className="rounded-lg border p-3"
+                      style={{ borderColor: "var(--border)", background: "var(--card)" }}
+                    >
+                      {/* Row 1: label + status + actions */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <Link
+                            href={`/servers/${server.id}`}
+                            className="font-mono font-semibold text-sm hover:underline block truncate"
+                            style={{ color: "#0ea5e9" }}
+                          >
+                            {server.label || "Server-???"}
+                          </Link>
+                          <div className="mt-0.5">
+                            <Badge variant="outline" className={status.className + " text-[10px]"}>
+                              {status.label}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="hover:bg-[rgba(14,165,233,0.1)]"
+                            style={{ color: "var(--muted-foreground)" }}
+                            onClick={() => router.push(`/servers/${server.id}`)}
+                          >
+                            <Pencil />
+                            <span className="sr-only">Edit</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                            onClick={() => {
+                              setServerToDelete(server)
+                              setDeleteDialogOpen(true)
+                            }}
+                          >
+                            <Trash2 />
+                            <span className="sr-only">Hapus</span>
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Row 2: nameservers */}
+                      <div className="mt-2 font-mono text-[11px]" style={{ color: "var(--muted-foreground)" }}>
+                        <div className="truncate">{server.name || "—"}</div>
+                        {server.nameserver2 && <div className="truncate">{server.nameserver2}</div>}
+                      </div>
+
+                      {/* Row 3: domain count */}
+                      <div className="mt-2 flex items-center justify-between text-[11px]">
+                        <span style={{ color: "var(--muted-foreground)" }}>
+                          {server._count.domains} domain terpasang
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* ─── Desktop table view (>= md) ─── */}
+              <div className="hidden md:block">
               <Table>
                 <TableHeader>
                   <TableRow className="border-b" style={{ borderColor: "var(--border)" }}>
@@ -395,6 +466,7 @@ export default function ServersPage() {
                   })}
                 </TableBody>
               </Table>
+              </div>
               {totalPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 border-t" style={{ borderColor: "var(--border)" }}>
                   <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>

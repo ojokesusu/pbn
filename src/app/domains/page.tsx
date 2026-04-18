@@ -367,18 +367,18 @@ export default function DomainsPage() {
   return (
     <SidebarInset>
       <AppHeader title="Domain" />
-      <div className="flex-1 space-y-6 p-6" style={{ background: "var(--background)", minHeight: "100vh" }}>
-        <div className="flex items-center justify-between">
+      <div className="flex-1 space-y-4 md:space-y-6 p-3 md:p-6" style={{ background: "var(--background)", minHeight: "100vh" }}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-2xl font-extrabold tracking-tight" style={{ color: "var(--foreground)" }}>Domain</h2>
-            <p style={{ color: "var(--muted-foreground)" }}>
+            <h2 className="text-xl md:text-2xl font-extrabold tracking-tight" style={{ color: "var(--foreground)" }}>Domain</h2>
+            <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
               Kelola domain jaringan blog privat Anda.
             </p>
           </div>
           <div className="flex gap-2">
             <Button
               variant="outline"
-              className="rounded-lg"
+              className="rounded-lg flex-1 sm:flex-initial"
               style={{ borderColor: "var(--border)", color: "var(--secondary-foreground)" }}
               onClick={handleSiteCheck}
               disabled={siteChecking}
@@ -386,7 +386,7 @@ export default function DomainsPage() {
               {siteChecking ? <Loader2 className="size-4 mr-1 animate-spin" /> : <Globe className="size-4 mr-1" />}
               {siteChecking ? "Mengecek..." : "Cek Situs"}
             </Button>
-            <Button className="bg-[#0ea5e9] hover:bg-[#0284c7] text-white rounded-lg shadow-lg shadow-[#0ea5e9]/20 transition-all" onClick={() => router.push("/domains/new")}>
+            <Button className="bg-[#0ea5e9] hover:bg-[#0284c7] text-white rounded-lg shadow-lg shadow-[#0ea5e9]/20 transition-all flex-1 sm:flex-initial" onClick={() => router.push("/domains/new")}>
               <Plus className="h-4 w-4 mr-1" />
               Tambah Domain
             </Button>
@@ -447,7 +447,7 @@ export default function DomainsPage() {
 
         {/* Bulk action bar — appears when checkboxes selected */}
         {selectedIds.size > 0 && (
-          <div className="flex items-center justify-between rounded-xl border p-4 shadow-lg animate-in fade-in slide-in-from-top-2" style={{ background: "linear-gradient(135deg, rgba(14,165,233,0.1), rgba(132,204,22,0.1))", borderColor: "rgba(14,165,233,0.3)" }}>
+          <div className="flex flex-col gap-3 rounded-xl border p-3 md:p-4 shadow-lg animate-in fade-in slide-in-from-top-2 md:flex-row md:items-center md:justify-between" style={{ background: "linear-gradient(135deg, rgba(14,165,233,0.1), rgba(132,204,22,0.1))", borderColor: "rgba(14,165,233,0.3)" }}>
             <div className="flex items-center gap-3">
               <div className="rounded-lg px-2.5 py-1 text-sm font-bold" style={{ background: "#0ea5e9", color: "#ffffff" }}>
                 {selectedIds.size}
@@ -457,12 +457,12 @@ export default function DomainsPage() {
                 clear
               </button>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Button variant="outline" size="sm" className="rounded-lg" style={{ borderColor: "var(--border)", color: "var(--secondary-foreground)" }} onClick={selectAllInactive}>
                 Pilih semua belum aktif
               </Button>
               <Button onClick={bulkActivateScheduler} disabled={bulkActivating} className="rounded-lg" style={{ background: "linear-gradient(135deg, #10b981, #059669)", color: "#ffffff" }}>
-                {bulkActivating ? <><Loader2 className="size-4 mr-1 animate-spin" /> Mengaktifkan...</> : `Aktifkan ${selectedIds.size} domain di Scheduler`}
+                {bulkActivating ? <><Loader2 className="size-4 mr-1 animate-spin" /> Mengaktifkan...</> : `Aktifkan ${selectedIds.size} domain`}
               </Button>
             </div>
           </div>
@@ -599,6 +599,149 @@ export default function DomainsPage() {
               </div>
             ) : (
               <>
+              {/* ─── Mobile card view (< md) ─── */}
+              <div className="md:hidden space-y-2.5">
+                {paginated.map((domain) => {
+                  const isSelected = selectedIds.has(domain.id)
+                  const template = domain.theme?.layoutName && templateConfig[domain.theme.layoutName]
+                  return (
+                    <div
+                      key={domain.id}
+                      className="rounded-lg border p-3 transition-colors"
+                      style={{
+                        borderColor: "var(--border)",
+                        background: isSelected ? "rgba(14,165,233,0.06)" : "var(--card)",
+                      }}
+                    >
+                      {/* Row 1: checkbox + name + actions */}
+                      <div className="flex items-start gap-2">
+                        <input
+                          type="checkbox"
+                          checked={domain.schedulerActive ? true : isSelected}
+                          disabled={domain.schedulerActive}
+                          onChange={() => toggleSelect(domain.id)}
+                          className="mt-1 size-4 rounded accent-[#10b981] disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
+                          title={domain.schedulerActive ? "Sudah aktif di scheduler" : "Pilih untuk aktivasi"}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <Link
+                              href={`/domains/${domain.id}`}
+                              className="font-semibold text-sm truncate hover:underline"
+                              style={{ color: "var(--foreground)" }}
+                            >
+                              {domain.name}
+                            </Link>
+                            {domain.schedulerActive && (
+                              <span
+                                title="Aktif di scheduler"
+                                className="size-1.5 rounded-full shrink-0"
+                                style={{ background: "#10b981", boxShadow: "0 0 6px rgba(16,185,129,0.6)" }}
+                              />
+                            )}
+                          </div>
+                          <a
+                            href={domain.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs hover:underline truncate max-w-full"
+                            style={{ color: "var(--muted-foreground)" }}
+                          >
+                            <span className="truncate">{domain.url.replace(/^https?:\/\//, "")}</span>
+                            <ExternalLink className="size-3 shrink-0" />
+                          </a>
+                        </div>
+                        <div className="flex shrink-0 gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="hover:bg-[rgba(14,165,233,0.1)]"
+                            style={{ color: "var(--muted-foreground)" }}
+                            onClick={() => router.push(`/domains/${domain.id}`)}
+                          >
+                            <Pencil />
+                            <span className="sr-only">Edit</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                            onClick={() => {
+                              setDomainToDelete(domain)
+                              setDeleteDialogOpen(true)
+                            }}
+                          >
+                            <Trash2 />
+                            <span className="sr-only">Hapus</span>
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Row 2: status badges */}
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {domain.lastDeployed ? (
+                          <Badge variant="outline" className="text-[10px]" style={{ background: "rgba(16,185,129,0.1)", color: "#10b981", borderColor: "transparent" }}>
+                            Deployed
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px]" style={{ background: "rgba(245,158,11,0.1)", color: "#f59e0b", borderColor: "transparent" }}>
+                            Belum Deploy
+                          </Badge>
+                        )}
+                        {domain.lastChecked && (
+                          domain.isAlive ? (
+                            <Badge variant="outline" className="text-[10px]" style={{ background: "rgba(16,185,129,0.1)", color: "#10b981", borderColor: "transparent" }}>
+                              Alive
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px]" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444", borderColor: "transparent" }}>
+                              Dead
+                            </Badge>
+                          )
+                        )}
+                        {domain.contentSource === "wordpress" && (
+                          <Badge variant="outline" className="text-[10px]" style={{ background: "rgba(168,85,247,0.1)", color: "#a855f7", borderColor: "transparent" }}>WP</Badge>
+                        )}
+                        {domain.contentSource === "ai" && (
+                          <Badge variant="outline" className="text-[10px]" style={{ background: "rgba(14,165,233,0.1)", color: "#0ea5e9", borderColor: "transparent" }}>AI</Badge>
+                        )}
+                        {domain.contentSource === "mixed" && (
+                          <Badge variant="outline" className="text-[10px]" style={{ background: "rgba(139,92,246,0.1)", color: "#8b5cf6", borderColor: "transparent" }}>WP+AI</Badge>
+                        )}
+                        {template && (
+                          <Badge variant="outline" className="border-0 text-[10px]" style={{ background: template.bg, color: template.color }}>
+                            {template.label}
+                          </Badge>
+                        )}
+                        {domain.genre && (
+                          <Badge variant="outline" className="border-0 text-[10px]" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>
+                            {domain.genre}
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Row 3: meta info */}
+                      <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
+                        <div className="min-w-0 flex-1">
+                          {domain.server ? (
+                            <span className="font-mono truncate block" style={{ color: "var(--muted-foreground)" }}>
+                              {domain.server.label || "—"}
+                            </span>
+                          ) : (
+                            <span style={{ color: "var(--muted-foreground)" }}>Tanpa server</span>
+                          )}
+                        </div>
+                        <span className="shrink-0" style={{ color: "var(--muted-foreground)" }}>
+                          {domain._count.articles} artikel
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* ─── Desktop table view (>= md) ─── */}
+              <div className="hidden md:block">
               <Table>
                 <TableHeader>
                   <TableRow className="border-b" style={{ borderColor: "var(--border)" }}>
@@ -791,6 +934,7 @@ export default function DomainsPage() {
                   })}
                 </TableBody>
               </Table>
+              </div>
               {/* Pagination */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 border-t" style={{ borderColor: "var(--border)" }}>

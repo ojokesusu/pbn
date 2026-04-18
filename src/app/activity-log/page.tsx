@@ -223,18 +223,18 @@ export default function ActivityLogPage() {
     <SidebarInset>
       <AppHeader title="Activity Log" />
       <div
-        className="flex-1 space-y-6 p-6"
+        className="flex-1 space-y-4 md:space-y-6 p-3 md:p-6"
         style={{ background: "var(--background)", minHeight: "100vh" }}
       >
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2
-              className="text-2xl font-extrabold tracking-tight"
+              className="text-xl md:text-2xl font-extrabold tracking-tight"
               style={{ color: "var(--foreground)" }}
             >
               Activity Log
             </h2>
-            <p style={{ color: "var(--muted-foreground)" }}>
+            <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
               Riwayat login & percobaan login — untuk pantau keamanan dashboard.
             </p>
           </div>
@@ -245,7 +245,7 @@ export default function ActivityLogPage() {
               load({ showSpinner: true })
             }}
             disabled={refreshing}
-            className="rounded-lg"
+            className="rounded-lg self-start sm:self-auto"
             style={{
               borderColor: "var(--border)",
               color: "var(--secondary-foreground)",
@@ -514,6 +514,127 @@ export default function ActivityLogPage() {
               </div>
             ) : (
               <>
+                {/* ─── Mobile card view (< md) ─── */}
+                <div className="md:hidden space-y-2.5">
+                  {items.map((a) => {
+                    const device = parseDevice(a.userAgent)
+                    const loc = locationLabel(a)
+                    return (
+                      <div
+                        key={a.id}
+                        className="rounded-lg border p-3"
+                        style={{
+                          borderColor: "var(--border)",
+                          background: "var(--card)",
+                        }}
+                      >
+                        {/* Row 1: status + username */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {a.success ? (
+                              <Badge
+                                variant="outline"
+                                className="bg-emerald-500/15 text-emerald-500 border-emerald-500/30 text-[10px]"
+                              >
+                                <CheckCircle2 className="size-3 mr-1" />
+                                Sukses
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className="bg-red-500/15 text-red-500 border-red-500/30 text-[10px]"
+                              >
+                                <XCircle className="size-3 mr-1" />
+                                Gagal
+                              </Badge>
+                            )}
+                            <span
+                              className="font-mono text-sm font-semibold truncate"
+                              style={{ color: "var(--foreground)" }}
+                            >
+                              {a.username || "—"}
+                            </span>
+                          </div>
+                          <span
+                            className="text-[10px] shrink-0"
+                            style={{ color: "var(--muted-foreground)" }}
+                          >
+                            {timeAgo(a.createdAt)}
+                          </span>
+                        </div>
+
+                        {/* Reason (only if failure, or meaningful) */}
+                        {!a.success && (
+                          <p
+                            className="mt-1.5 text-xs"
+                            style={{ color: "var(--foreground)" }}
+                          >
+                            {reasonLabel(a.reason)}
+                          </p>
+                        )}
+
+                        {/* Row 3: location + IP */}
+                        <div className="mt-2 flex items-center gap-1.5 text-xs">
+                          {loc.flag && <span className="text-sm shrink-0">{loc.flag}</span>}
+                          <span
+                            className="font-medium truncate"
+                            style={{ color: "var(--foreground)" }}
+                          >
+                            {loc.primary}
+                          </span>
+                          {loc.secondary && (
+                            <span
+                              className="truncate"
+                              style={{ color: "var(--muted-foreground)" }}
+                            >
+                              · {loc.secondary}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Row 4: IP + device */}
+                        <div className="mt-1 flex items-center justify-between gap-2 text-[11px]">
+                          <span
+                            className="font-mono truncate"
+                            style={{ color: "var(--muted-foreground)" }}
+                          >
+                            {a.ip || "—"}
+                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {device.kind === "mobile" ? (
+                              <Smartphone
+                                className="size-3"
+                                style={{ color: "var(--muted-foreground)" }}
+                              />
+                            ) : (
+                              <Monitor
+                                className="size-3"
+                                style={{ color: "var(--muted-foreground)" }}
+                              />
+                            )}
+                            <span
+                              className="truncate max-w-[140px]"
+                              style={{ color: "var(--muted-foreground)" }}
+                            >
+                              {device.label}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Full timestamp */}
+                        <p
+                          className="mt-1 font-mono text-[10px]"
+                          style={{ color: "var(--muted-foreground)", opacity: 0.7 }}
+                        >
+                          {formatDateTime(a.createdAt)}
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* ─── Desktop table view (>= md) ─── */}
+                <div className="hidden md:block">
                 <Table>
                   <TableHeader>
                     <TableRow
@@ -694,6 +815,7 @@ export default function ActivityLogPage() {
                     })}
                   </TableBody>
                 </Table>
+                </div>
                 {totalPages > 1 && (
                   <div
                     className="flex items-center justify-between px-4 py-3 border-t"
