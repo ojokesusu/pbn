@@ -181,6 +181,13 @@ const MENU_GROUPS: NavGroup[] = [
         tourId: "nav-scheduler",
         pulse: (s) => !!s?.schedulerRunning,
       },
+      {
+        title: "Activity Log",
+        href: "/activity-log",
+        icon: Activity,
+        tourId: "nav-activity-log",
+        adminOnly: true,
+      },
     ],
   },
 ]
