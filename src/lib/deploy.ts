@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db";
 import { generateSite } from "@/lib/generator";
 import { deployVisFtp } from "@/lib/ftp";
+import { submitToIndexNow } from "@/lib/google-ping";
 
 export interface DeployResult {
   domainId: string;
@@ -104,12 +105,15 @@ export async function deployDomain(domainId: string): Promise<DeployResult> {
         data: { lastDeployed: new Date() },
       });
 
+      // Fire-and-forget IndexNow ping to Bing/Yandex — logged in DeployLog, visible in Google Ping page
+      submitToIndexNow(domainId).catch(() => {});
+
       return {
         domainId,
         url: domain.url,
         status: "success",
         filesDeployed: result.filesUploaded,
-        message: `${result.filesUploaded} files uploaded`,
+        message: `${result.filesUploaded} files uploaded + IndexNow pinged`,
         durationMs: Date.now() - start,
       };
     } else {
