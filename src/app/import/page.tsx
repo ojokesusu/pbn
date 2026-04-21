@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import Link from "next/link"
-import { Upload, CheckCircle2, AlertCircle, Loader2, Server, Globe, Link2, ArrowRight } from "lucide-react"
+import { Upload, CheckCircle2, AlertCircle, Loader2, Server, Globe, Link2, ArrowRight, FileSpreadsheet, X } from "lucide-react"
 
 import { SidebarInset } from "@/components/ui/sidebar"
 import { useConfirm } from "@/components/ui/confirm-modal"
@@ -18,22 +18,43 @@ interface ImportResults {
 
 export default function ImportPage() {
   const confirm = useConfirm()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [preview, setPreview] = useState<ImportResults | null>(null)
   const [results, setResults] = useState<ImportResults | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] || null
+    setSelectedFile(file)
+    setPreview(null)
+    setResults(null)
+    setError(null)
+  }
+
+  function clearFile() {
+    setSelectedFile(null)
+    setPreview(null)
+    setResults(null)
+    setError(null)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
   async function handlePreview() {
+    if (!selectedFile) {
+      setError("Pilih file .xlsx terlebih dahulu")
+      return
+    }
     setPreviewing(true)
     setError(null)
     setResults(null)
     try {
-      const res = await fetch("/api/import/xlsx", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "preview" }),
-      })
+      const formData = new FormData()
+      formData.append("file", selectedFile)
+      formData.append("action", "preview")
+      const res = await fetch("/api/import/xlsx", { method: "POST", body: formData })
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || "Preview gagal")
@@ -48,16 +69,19 @@ export default function ImportPage() {
   }
 
   async function handleImport() {
+    if (!selectedFile) {
+      setError("Pilih file .xlsx terlebih dahulu")
+      return
+    }
     const ok = await confirm({ message: "Import semua data? Data lama yang sama akan di-skip." })
     if (!ok) return
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch("/api/import/xlsx", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "import" }),
-      })
+      const formData = new FormData()
+      formData.append("file", selectedFile)
+      formData.append("action", "import")
+      const res = await fetch("/api/import/xlsx", { method: "POST", body: formData })
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || "Import gagal")
@@ -81,9 +105,50 @@ export default function ImportPage() {
           <div>
             <h2 className="text-2xl font-extrabold tracking-tight" style={{ color: "var(--foreground)" }}>Import dari Excel</h2>
             <p className="mt-1 text-sm" style={{ color: "var(--muted-foreground)" }}>
-              Import data dari file <code className="px-1.5 py-0.5 rounded text-xs font-mono" style={{ background: "var(--muted)" }}>imports/PBN Project.xlsx</code>
+              Upload file <code className="px-1.5 py-0.5 rounded text-xs font-mono" style={{ background: "var(--muted)" }}>.xlsx</code> langsung dari laptop kamu
             </p>
           </div>
+        </div>
+
+        {/* File Upload Zone */}
+        <div
+          className="rounded-xl border-2 border-dashed p-8 mb-6 text-center cursor-pointer transition-all"
+          style={{
+            borderColor: selectedFile ? "#0ea5e9" : "var(--border)",
+            background: selectedFile ? "rgba(14,165,233,0.05)" : "var(--card)",
+          }}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          {selectedFile ? (
+            <div className="flex items-center justify-center gap-3">
+              <FileSpreadsheet className="size-8 text-[#0ea5e9]" />
+              <div className="text-left">
+                <p className="font-semibold" style={{ color: "var(--foreground)" }}>{selectedFile.name}</p>
+                <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+                  {(selectedFile.size / 1024).toFixed(1)} KB
+                </p>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); clearFile() }}
+                className="ml-4 p-1 rounded-full hover:bg-red-100 transition-colors"
+              >
+                <X className="size-4 text-red-500" />
+              </button>
+            </div>
+          ) : (
+            <div>
+              <Upload className="size-10 mx-auto mb-3" style={{ color: "var(--muted-foreground)" }} />
+              <p className="font-semibold mb-1" style={{ color: "var(--foreground)" }}>Klik untuk pilih file Excel</p>
+              <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>Format: .xlsx — Max 10MB</p>
+            </div>
+          )}
         </div>
 
         {/* Info Cards */}
@@ -153,7 +218,7 @@ export default function ImportPage() {
             className="rounded-lg"
             style={{ borderColor: "var(--border)", color: "var(--secondary-foreground)" }}
             onClick={handlePreview}
-            disabled={previewing || loading}
+            disabled={previewing || loading || !selectedFile}
           >
             {previewing ? <Loader2 className="size-4 mr-1 animate-spin" /> : <Upload className="size-4 mr-1" />}
             {previewing ? "Scanning..." : "Scan File"}
@@ -161,7 +226,7 @@ export default function ImportPage() {
           <Button
             className="bg-[#0ea5e9] hover:bg-[#0284c7] text-white rounded-lg shadow-lg shadow-[#0ea5e9]/20"
             onClick={handleImport}
-            disabled={loading || !preview}
+            disabled={loading || !preview || !selectedFile}
           >
             {loading ? <Loader2 className="size-4 mr-1 animate-spin" /> : <CheckCircle2 className="size-4 mr-1" />}
             {loading ? "Importing..." : "Import Semua"}
@@ -202,9 +267,9 @@ export default function ImportPage() {
         <div className="rounded-xl border p-6 mb-6" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
           <h3 className="font-semibold mb-3" style={{ color: "var(--foreground)" }}>Cara Pakai</h3>
           <ol className="space-y-2 text-sm" style={{ color: "var(--muted-foreground)" }}>
-            <li><strong>1.</strong> Taruh file <code className="px-1.5 py-0.5 rounded text-xs" style={{ background: "var(--muted)" }}>PBN Project.xlsx</code> di folder <code className="px-1.5 py-0.5 rounded text-xs" style={{ background: "var(--muted)" }}>imports/</code></li>
+            <li><strong>1.</strong> Klik kotak upload di atas → pilih file <code className="px-1.5 py-0.5 rounded text-xs" style={{ background: "var(--muted)" }}>.xlsx</code> dari laptop kamu</li>
             <li><strong>2.</strong> File harus punya 3 sheet: <strong>Servers</strong>, <strong>Domains</strong>, <strong>Backlinks</strong></li>
-            <li><strong>3.</strong> Klik <strong>Scan File</strong> untuk preview jumlah data</li>
+            <li><strong>3.</strong> Klik <strong>Scan File</strong> untuk preview jumlah data sebelum diimport</li>
             <li><strong>4.</strong> Klik <strong>Import Semua</strong> untuk memasukkan data ke database</li>
           </ol>
           <div className="mt-4 p-3 rounded-lg text-xs" style={{ background: "var(--background)", color: "var(--muted-foreground)" }}>

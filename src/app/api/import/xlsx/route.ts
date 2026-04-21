@@ -83,25 +83,40 @@ function simpleHash(str: string): number {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { action } = body; // "preview" or "import"
+    let action: string;
+    let fileBuffer: Buffer;
 
-    // Read xlsx file — find any .xlsx in the imports folder
-    const importsDir = path.join(process.cwd(), "imports");
-    if (!fs.existsSync(importsDir)) {
-      return NextResponse.json({ error: "Folder imports/ tidak ditemukan" }, { status: 404 });
+    const contentType = request.headers.get("content-type") || "";
+
+    if (contentType.includes("multipart/form-data")) {
+      // ── New: file uploaded directly from browser ──
+      const formData = await request.formData();
+      action = String(formData.get("action") || "preview");
+      const file = formData.get("file") as File | null;
+      if (!file) {
+        return NextResponse.json({ error: "Tidak ada file yang di-upload" }, { status: 400 });
+      }
+      if (!file.name.toLowerCase().endsWith(".xlsx")) {
+        return NextResponse.json({ error: "File harus berformat .xlsx" }, { status: 400 });
+      }
+      fileBuffer = Buffer.from(await file.arrayBuffer());
+    } else {
+      // ── Legacy: read file from imports/ folder on disk ──
+      const body = await request.json();
+      action = body.action || "preview";
+      const importsDir = path.join(process.cwd(), "imports");
+      if (!fs.existsSync(importsDir)) {
+        return NextResponse.json({ error: "Folder imports/ tidak ditemukan. Gunakan upload file langsung." }, { status: 404 });
+      }
+      const xlsxFiles = fs.readdirSync(importsDir).filter(f => f.toLowerCase().endsWith(".xlsx"));
+      if (xlsxFiles.length === 0) {
+        return NextResponse.json({ error: "Tidak ada file .xlsx di folder imports/. Gunakan upload file langsung." }, { status: 404 });
+      }
+      const mergedFile = xlsxFiles.find(f => f.toLowerCase().includes("merged"));
+      const filePath = path.join(importsDir, mergedFile || xlsxFiles[0]);
+      fileBuffer = fs.readFileSync(filePath);
     }
 
-    const xlsxFiles = fs.readdirSync(importsDir).filter(f => f.toLowerCase().endsWith(".xlsx"));
-    if (xlsxFiles.length === 0) {
-      return NextResponse.json({ error: "Tidak ada file .xlsx di folder imports/" }, { status: 404 });
-    }
-
-    // Prefer "Merged" file if it exists, otherwise use the first .xlsx
-    const mergedFile = xlsxFiles.find(f => f.toLowerCase().includes("merged"));
-    const filePath = path.join(importsDir, mergedFile || xlsxFiles[0]);
-
-    const fileBuffer = fs.readFileSync(filePath);
     const wb = XLSX.read(fileBuffer, { type: "buffer" });
     const results: {
       servers: { total: number; imported: number; errors: string[] };
@@ -172,13 +187,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Build domain → IP lookup from original PBN Domain and server data.xlsx if present
-    // This helps match domains that share IPs (where ns1.domain.com doesn't exist as a server)
+    // Build domain → IP lookup from "domain and server data.xlsx" if present on disk (legacy only)
     const domainToIp = new Map<string, string>();
-    const sourceFile = xlsxFiles.find(f => f.toLowerCase().includes("domain and server data"));
+    const legacyImportsDir = path.join(process.cwd(), "imports");
+    const legacyFiles = fs.existsSync(legacyImportsDir) ? fs.readdirSync(legacyImportsDir).filter(f => f.toLowerCase().endsWith(".xlsx")) : [];
+    const sourceFile = legacyFiles.find(f => f.toLowerCase().includes("domain and server data"));
     if (sourceFile) {
       try {
-        const sourceBuf = fs.readFileSync(path.join(importsDir, sourceFile));
+        const sourceBuf = fs.readFileSync(path.join(legacyImportsDir, sourceFile));
         const sourceWb = XLSX.read(sourceBuf, { type: "buffer" });
         const sourceSheet = sourceWb.Sheets[sourceWb.SheetNames[0]];
         const sourceRows = XLSX.utils.sheet_to_json<unknown[]>(sourceSheet, { header: 1 }).slice(1);
