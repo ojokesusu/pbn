@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -115,39 +115,57 @@ export default function ServersPage() {
   const [syncDialogOpen, setSyncDialogOpen] = useState(false)
   const [serverToDelete, setServerToDelete] = useState<Server | null>(null)
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
-  const perPage = 25
+  const [total, setTotal] = useState(0)
+  const perPage = 100
 
-  const filtered = servers.filter((s) => {
-    if (statusFilter && s.status !== statusFilter) return false
-    if (!search) return true
-    const q = search.toLowerCase()
-    return (
-      (s.label ?? "").toLowerCase().includes(q) ||
-      s.name.toLowerCase().includes(q) ||
-      s.host.toLowerCase().includes(q)
-    )
-  })
-  const totalPages = Math.ceil(filtered.length / perPage)
-  const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage)
+  // Aliases so the JSX below keeps working unchanged. Server is already
+  // doing the filtering + pagination work; the UI just renders what arrives.
+  const filtered = servers
+  const paginated = servers
+  const totalPages = Math.max(1, Math.ceil(total / perPage))
 
+  // Debounce search keystrokes to avoid hammering the API
   useEffect(() => {
-    fetchServers()
-  }, [])
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
 
-  async function fetchServers() {
+  // Snap to page 1 when filters change so we don't strand the user on an
+  // empty page 8.
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [debouncedSearch, statusFilter])
+
+  const fetchServers = useCallback(async () => {
     try {
-      const res = await fetch("/api/servers")
+      const params = new URLSearchParams()
+      if (debouncedSearch) params.set("search", debouncedSearch)
+      if (statusFilter) params.set("status", statusFilter)
+      params.set("page", String(currentPage))
+      params.set("perPage", String(perPage))
+      const res = await fetch(`/api/servers?${params.toString()}`)
       if (!res.ok) throw new Error("Failed to fetch")
-      const data = await res.json()
-      setServers(data)
+      const json = await res.json()
+      if (Array.isArray(json)) {
+        setServers(json)
+        setTotal(json.length)
+      } else {
+        setServers(json.data ?? [])
+        setTotal(json.total ?? 0)
+      }
     } catch (error) {
       console.error("Failed to fetch servers:", error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [debouncedSearch, statusFilter, currentPage])
+
+  useEffect(() => {
+    fetchServers()
+  }, [fetchServers])
 
   async function handleSyncCloudflare() {
     const ok = await confirm({
@@ -155,7 +173,7 @@ export default function ServersPage() {
       message:
         `Sistem akan pull semua zone dari Cloudflare API lalu update nameserver setiap server berdasarkan data real.\n\n` +
         `Juga akan laporkan berapa zone active / pending / tidak ditemukan.\n\n` +
-        `Proses: ~30-60 detik untuk ${servers.length} server.`,
+        `Proses: ~30-60 detik untuk ${total} server.`,
       confirmText: "Jalankan Sync",
     })
     if (!ok) return
@@ -189,6 +207,7 @@ export default function ServersPage() {
       })
       if (!res.ok) throw new Error("Failed to delete")
       setServers((prev) => prev.filter((s) => s.id !== serverToDelete.id))
+      setTotal((t) => Math.max(0, t - 1))
     } catch (error) {
       console.error("Failed to delete server:", error)
     } finally {

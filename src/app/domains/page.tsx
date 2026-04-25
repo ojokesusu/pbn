@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -103,6 +103,22 @@ interface SiteCheckResult {
   message: string
 }
 
+interface DomainStats {
+  total: number
+  deployed: number
+  alive: number
+  dead: number
+  withArticles: number
+  wpOnly: number
+  aiOnly: number
+  mixed: number
+  magazine: number
+  blog: number
+  berita: number
+  schedulerActive: number
+  schedulerInactive: number
+}
+
 export default function DomainsPage() {
   const router = useRouter()
   const confirm = useConfirm()
@@ -112,8 +128,16 @@ export default function DomainsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [domainToDelete, setDomainToDelete] = useState<Domain | null>(null)
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
-  const perPage = 25
+  const [total, setTotal] = useState(0)
+  const [stats, setStats] = useState<DomainStats>({
+    total: 0, deployed: 0, alive: 0, dead: 0, withArticles: 0,
+    wpOnly: 0, aiOnly: 0, mixed: 0,
+    magazine: 0, blog: 0, berita: 0, schedulerActive: 0, schedulerInactive: 0,
+  })
+  const [genres, setGenres] = useState<string[]>([])
+  const perPage = 100
 
   // Site check state
   const [siteCheckResults, setSiteCheckResults] = useState<Record<string, SiteCheckResult>>({})
@@ -131,77 +155,63 @@ export default function DomainsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkActivating, setBulkActivating] = useState(false)
 
-  const filtered = domains.filter((d) => {
-    // Search
-    if (search) {
-      const q = search.toLowerCase()
-      const matchSearch = d.name.toLowerCase().includes(q) || d.url.toLowerCase().includes(q) || d.genre?.toLowerCase().includes(q) || d.server?.name?.toLowerCase().includes(q) || d.server?.host?.toLowerCase().includes(q)
-      if (!matchSearch) return false
-    }
-    // Deploy filter
-    if (deployFilter === "deployed" && !d.lastDeployed) return false
-    if (deployFilter === "not-deployed" && d.lastDeployed) return false
-    // Health filter
-    if (healthFilter === "alive" && !d.isAlive) return false
-    if (healthFilter === "dead" && (d.isAlive || !d.lastChecked)) return false
-    if (healthFilter === "unchecked" && d.lastChecked) return false
-    // Genre filter
-    if (genreFilter && d.genre !== genreFilter) return false
-    // Content filter
-    if (contentFilter === "has-articles" && d._count.articles === 0) return false
-    if (contentFilter === "no-articles" && d._count.articles > 0) return false
-    if (contentFilter === "wp-only" && d.contentSource !== "wordpress") return false
-    if (contentFilter === "ai-only" && d.contentSource !== "ai") return false
-    if (contentFilter === "mixed" && d.contentSource !== "mixed") return false
-    // Template filter
-    if (templateFilter === "none" && d.theme?.layoutName) return false
-    if (templateFilter && templateFilter !== "none" && d.theme?.layoutName !== templateFilter) return false
-    // Scheduler filter
-    if (schedulerFilter === "active" && !d.schedulerActive) return false
-    if (schedulerFilter === "inactive" && d.schedulerActive) return false
-    return true
-  })
-  const totalPages = Math.ceil(filtered.length / perPage)
-  const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage)
-
-  // Unique genres for filter
-  const genres = [...new Set(domains.map((d) => d.genre).filter(Boolean))].sort()
-
-  // Quick stats
-  const stats = {
-    total: domains.length,
-    deployed: domains.filter((d) => d.lastDeployed).length,
-    alive: domains.filter((d) => d.isAlive).length,
-    dead: domains.filter((d) => !d.isAlive && d.lastChecked).length,
-    withArticles: domains.filter((d) => d._count.articles > 0).length,
-    wpOnly: domains.filter((d) => d.contentSource === "wordpress").length,
-    aiOnly: domains.filter((d) => d.contentSource === "ai").length,
-    mixed: domains.filter((d) => d.contentSource === "mixed").length,
-    magazine: domains.filter((d) => d.theme?.layoutName === "magazine").length,
-    blog: domains.filter((d) => d.theme?.layoutName === "blog").length,
-    berita: domains.filter((d) => d.theme?.layoutName === "berita").length,
-    schedulerActive: domains.filter((d) => d.schedulerActive).length,
-    schedulerInactive: domains.filter((d) => !d.schedulerActive).length,
-  }
+  // The visible list IS the current page — server already paginated + filtered.
+  // We keep `paginated` and `filtered` aliases so the existing JSX below stays
+  // unchanged.
+  const filtered = domains
+  const paginated = domains
+  const totalPages = Math.max(1, Math.ceil(total / perPage))
 
   const hasActiveFilters = deployFilter || healthFilter || genreFilter || contentFilter || templateFilter || schedulerFilter
 
+  // Debounce the search box so each keystroke doesn't fire an API call
   useEffect(() => {
-    fetchDomains()
-  }, [])
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
 
-  async function fetchDomains() {
+  // Snap back to page 1 whenever a filter or search changes — otherwise the
+  // user can land on page 8 of empty results.
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [debouncedSearch, deployFilter, healthFilter, genreFilter, contentFilter, templateFilter, schedulerFilter])
+
+  const fetchDomains = useCallback(async () => {
     try {
-      const res = await fetch("/api/domains")
+      const params = new URLSearchParams()
+      if (debouncedSearch) params.set("search", debouncedSearch)
+      if (deployFilter) params.set("deploy", deployFilter)
+      if (healthFilter) params.set("health", healthFilter)
+      if (genreFilter) params.set("genre", genreFilter)
+      if (contentFilter) params.set("content", contentFilter)
+      if (templateFilter) params.set("template", templateFilter)
+      if (schedulerFilter) params.set("scheduler", schedulerFilter)
+      params.set("page", String(currentPage))
+      params.set("perPage", String(perPage))
+      const res = await fetch(`/api/domains?${params.toString()}`)
       if (!res.ok) throw new Error("Failed to fetch")
-      const data = await res.json()
-      setDomains(data)
+      const json = await res.json()
+      // Backwards-compatibility: tolerate the old array-shaped response too,
+      // in case a stale browser tab races a deploy.
+      if (Array.isArray(json)) {
+        setDomains(json)
+        setTotal(json.length)
+      } else {
+        setDomains(json.data ?? [])
+        setTotal(json.total ?? 0)
+        if (json.stats) setStats(json.stats)
+        if (Array.isArray(json.genres)) setGenres(json.genres)
+      }
     } catch (error) {
       console.error("Failed to fetch domains:", error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [debouncedSearch, deployFilter, healthFilter, genreFilter, contentFilter, templateFilter, schedulerFilter, currentPage])
+
+  useEffect(() => {
+    fetchDomains()
+  }, [fetchDomains])
 
   async function handleDelete() {
     if (!domainToDelete) return
@@ -212,6 +222,7 @@ export default function DomainsPage() {
       })
       if (!res.ok) throw new Error("Failed to delete")
       setDomains((prev) => prev.filter((d) => d.id !== domainToDelete.id))
+      setTotal((t) => Math.max(0, t - 1))
     } catch (error) {
       console.error("Failed to delete domain:", error)
     } finally {

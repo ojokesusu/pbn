@@ -2,16 +2,45 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { denyIfNotAdmin } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const denied = await denyIfNotAdmin();
   if (denied) return denied;
   try {
-    const servers = await prisma.server.findMany({
-      include: { _count: { select: { domains: true } } },
-      orderBy: { createdAt: "desc" },
-    });
+    const { searchParams } = new URL(request.url);
+    const search = (searchParams.get("search") || "").trim();
+    const status = (searchParams.get("status") || "").trim();
+    // Legacy callers (e.g. /domains/new server dropdown) get the array shape.
+    const isPaginated = searchParams.has("page") || searchParams.has("perPage");
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+    const perPageRaw = parseInt(searchParams.get("perPage") || "100", 10) || 100;
+    const perPage = Math.min(500, Math.max(1, perPageRaw));
 
-    return NextResponse.json(servers);
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+    if (search) {
+      where.OR = [
+        { label: { contains: search, mode: "insensitive" } },
+        { name: { contains: search, mode: "insensitive" } },
+        { host: { contains: search, mode: "insensitive" } },
+        { username: { contains: search, mode: "insensitive" } },
+        { nameserver2: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    const [total, servers] = await Promise.all([
+      prisma.server.count({ where }),
+      prisma.server.findMany({
+        where,
+        include: { _count: { select: { domains: true } } },
+        orderBy: { createdAt: "desc" },
+        ...(isPaginated ? { take: perPage, skip: (page - 1) * perPage } : {}),
+      }),
+    ]);
+
+    if (!isPaginated) {
+      return NextResponse.json(servers);
+    }
+    return NextResponse.json({ data: servers, total, page, perPage });
   } catch (error) {
     console.error("Failed to fetch servers:", error);
     return NextResponse.json(

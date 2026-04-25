@@ -66,7 +66,7 @@ function LoginForm() {
               <Lock className="size-7 text-white" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight" style={{ color: "#0f172a" }}>
-              PBN Manager
+              PBN ROKET
             </h1>
             <p className="mt-1 text-sm" style={{ color: "#64748b" }}>
               Masuk untuk mengelola jaringan blog Anda

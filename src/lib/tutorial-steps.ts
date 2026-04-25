@@ -3,7 +3,7 @@ import type { DriveStep } from "driver.js";
 export const dashboardTutorialSteps: DriveStep[] = [
   {
     popover: {
-      title: "Selamat Datang di PBN Manager!",
+      title: "Selamat Datang di PBN ROKET!",
       description:
         "Dashboard ini mengelola seluruh jaringan PBN Anda — dari import data, generate konten AI, deploy otomatis, hingga monitoring index Google. Mari kita pelajari setiap menu.",
       side: "over",
@@ -179,7 +179,7 @@ export const dashboardTutorialSteps: DriveStep[] = [
     popover: {
       title: "Ulangi Tutorial",
       description:
-        "Klik tombol ini kapan saja untuk melihat tutorial lagi. Selamat menggunakan PBN Manager!",
+        "Klik tombol ini kapan saja untuk melihat tutorial lagi. Selamat menggunakan PBN ROKET!",
       side: "bottom",
       align: "end",
     },

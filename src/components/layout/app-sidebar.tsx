@@ -276,7 +276,7 @@ export function AppSidebar() {
             P
           </span>
           <span className="truncate text-sm font-semibold tracking-tight text-[color:var(--secondary-foreground)]">
-            PBN Manager
+            PBN ROKET
           </span>
         </Link>
       </SidebarHeader>

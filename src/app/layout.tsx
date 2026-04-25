@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "PBN Manager",
+  title: "PBN ROKET",
   description: "Dasbor Manajemen Jaringan Blog Privat",
 }
 
