@@ -7,18 +7,15 @@ const PUBLIC_API = ["/api/auth/login"]
 // CSP is intentionally permissive for inline styles (the dashboard relies on
 // inline style attributes for theming) but blocks inline scripts.
 function applySecurityHeaders(res: NextResponse): NextResponse {
-  // Force HTTPS for 1 year (only effective when served over HTTPS in prod)
   res.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-  // Block clickjacking
   res.headers.set("X-Frame-Options", "DENY")
-  // Block MIME sniffing
   res.headers.set("X-Content-Type-Options", "nosniff")
-  // Don't leak referrer to external origins
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin")
-  // Disable risky browser features by default
   res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()")
-  // Cross-origin protections
   res.headers.set("X-XSS-Protection", "1; mode=block")
+  // Tell Railway's Fastly CDN not to cache — dynamic Next.js app, all pages are user-specific
+  res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate")
+  res.headers.set("Surrogate-Control", "no-store")
   return res
 }
 
