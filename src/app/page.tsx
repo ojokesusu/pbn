@@ -203,10 +203,16 @@ export default function Home() {
     const load = () => {
       Promise.all([
         fetch("/api/stats").then((r) => r.json()),
-        fetch("/api/domains").then((r) => r.json()),
+        // Home preview table only renders the recent 8 domains. Hitting the
+        // paginated path keeps the payload tiny (~5 KB instead of ~430 KB).
+        // The real domain count comes from /api/stats.totalDomains so we
+        // don't need the full list here.
+        fetch("/api/domains?page=1&perPage=8").then((r) => r.json()),
       ]).then(([s, d]) => {
         setStats(s);
-        setDomains(d);
+        // Tolerate either response shape — paginated returns {data,total},
+        // legacy returns a plain array.
+        setDomains(Array.isArray(d) ? d : (d.data ?? []));
         setLoading(false);
       });
     };
@@ -246,8 +252,11 @@ export default function Home() {
   function refreshStats() {
     Promise.all([
       fetch("/api/stats").then((r) => r.json()),
-      fetch("/api/domains").then((r) => r.json()),
-    ]).then(([s, d]) => { setStats(s); setDomains(d); });
+      fetch("/api/domains?page=1&perPage=8").then((r) => r.json()),
+    ]).then(([s, d]) => {
+      setStats(s);
+      setDomains(Array.isArray(d) ? d : (d.data ?? []));
+    });
   }
 
   async function runTask(task: string) {
@@ -759,7 +768,7 @@ export default function Home() {
           <CardHeader className="flex flex-row items-center justify-between px-6 py-5 border-b border-[color:var(--border)]">
             <div>
               <CardTitle className="text-lg font-semibold text-[color:var(--foreground)]">Domain Terbaru</CardTitle>
-              <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">{domains.length} domain terdaftar</p>
+              <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">{stats?.totalDomains ?? 0} domain terdaftar</p>
             </div>
             <Button
               variant="ghost" size="sm"
