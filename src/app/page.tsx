@@ -230,20 +230,27 @@ export default function Home() {
     };
   }, []);
 
-  // Live clock — client-only to avoid hydration mismatch
+  // Live clock — client-only to avoid hydration mismatch.
+  // CRITICAL: don't call new Date() during render (e.g. as a fallback when
+  // `clock` is null), because the server's render produces a different string
+  // than the client's first render before this effect fires. That mismatch
+  // throws React error #418 ("hydration failed") and breaks the entire app
+  // tree — menus stop navigating, etc. Render a placeholder until `clock` is
+  // populated after mount.
   useEffect(() => {
     setClock(new Date());
     const timer = setInterval(() => setClock(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const now = clock || new Date();
-  const today = now.toLocaleDateString("id-ID", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const today = clock
+    ? clock.toLocaleDateString("id-ID", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : "—";
 
   const timeStr = clock
     ? clock.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })
@@ -352,13 +359,15 @@ export default function Home() {
           <div className="flex items-center gap-5">
             <div>
               <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight" style={{ background: "linear-gradient(135deg, #0ea5e9, #84cc16)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                {(() => {
-                  const hour = now.getHours();
-                  if (hour < 11) return "Selamat Pagi";
-                  if (hour < 15) return "Selamat Siang";
-                  if (hour < 18) return "Selamat Sore";
-                  return "Selamat Malam";
-                })()}
+                {clock
+                  ? (() => {
+                      const hour = clock.getHours();
+                      if (hour < 11) return "Selamat Pagi";
+                      if (hour < 15) return "Selamat Siang";
+                      if (hour < 18) return "Selamat Sore";
+                      return "Selamat Malam";
+                    })()
+                  : "Selamat Datang"}
               </h2>
               <p className="text-sm text-[color:var(--muted-foreground)] mt-1">{today}</p>
             </div>
