@@ -74,7 +74,5 @@ export function getServerSchedulerStatus() {
   };
 }
 
-// Auto-start when this module is first imported on the server
-if (typeof window === "undefined") {
-  startServerScheduler();
-}
+// Do NOT auto-start here — instrumentation.ts is the single entry point.
+// Double-starting exhausts Supabase connection slots.
