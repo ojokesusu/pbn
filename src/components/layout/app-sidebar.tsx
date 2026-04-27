@@ -282,7 +282,7 @@ export function AppSidebar() {
       </SidebarHeader>
 
       {/* ── Main Navigation (grouped) ── */}
-      <SidebarContent className="px-1.5 py-2">
+      <SidebarContent className="px-1.5 py-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(14,165,233,0.25)] hover:[&::-webkit-scrollbar-thumb]:bg-[rgba(14,165,233,0.5)]">
         {MENU_GROUPS.map((group) => {
           const visibleItems = group.items.filter(
             (item) => !item.adminOnly || me?.role === "admin"
