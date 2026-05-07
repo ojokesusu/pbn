@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { processSchedulerTick } from "@/lib/scheduler";
 
 // POST /api/scheduler/tick — trigger the scheduler to process due jobs
-// In production, this would be called by a cron job every 10-15 minutes
-// For now, the dashboard UI can call it manually or set up a browser-based interval
+// Auto-triggered every 10 minutes by server-scheduler.ts (setInterval, server-side)
+// Can also be called manually from the Scheduler page UI
 export async function POST() {
   try {
     const result = await processSchedulerTick();

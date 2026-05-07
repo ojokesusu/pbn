@@ -133,8 +133,10 @@ export async function updateDnsRecord(zoneId: string, recordId: string, record: 
 }
 
 // Sync DNS for one domain → set A @ → IP, CNAME www → @
-// Returns what was changed
-export async function syncDomainDns(domain: string, ip: string): Promise<{
+// Returns what was changed.
+// `proxied` param: when set (true/false), forces both records to that proxy state.
+// When omitted, preserves existing proxy state on update and defaults to false on create.
+export async function syncDomainDns(domain: string, ip: string, proxied?: boolean): Promise<{
   domain: string;
   zoneId: string;
   aRecord: { action: "created" | "updated" | "unchanged"; from?: string };
@@ -170,19 +172,24 @@ export async function syncDomainDns(domain: string, ip: string): Promise<{
       type: "A",
       name: domain,
       content: ip,
-      proxied: false,
+      proxied: proxied ?? false,
       ttl: 1,
     });
     result.aRecord = { action: "created" };
-  } else if (aRecord.content !== ip) {
-    await updateDnsRecord(zone.id, aRecord.id, {
-      type: "A",
-      name: domain,
-      content: ip,
-      proxied: aRecord.proxied,
-      ttl: aRecord.ttl,
-    });
-    result.aRecord = { action: "updated", from: aRecord.content };
+  } else {
+    const desiredProxied = proxied ?? aRecord.proxied;
+    const ipChanged = aRecord.content !== ip;
+    const proxyChanged = aRecord.proxied !== desiredProxied;
+    if (ipChanged || proxyChanged) {
+      await updateDnsRecord(zone.id, aRecord.id, {
+        type: "A",
+        name: domain,
+        content: ip,
+        proxied: desiredProxied,
+        ttl: aRecord.ttl,
+      });
+      result.aRecord = { action: "updated", from: aRecord.content };
+    }
   }
 
   // Handle www CNAME
@@ -191,7 +198,7 @@ export async function syncDomainDns(domain: string, ip: string): Promise<{
       type: "CNAME",
       name: `www.${domain}`,
       content: domain,
-      proxied: false,
+      proxied: proxied ?? false,
       ttl: 1,
     });
     result.wwwRecord = { action: "created" };
@@ -201,7 +208,7 @@ export async function syncDomainDns(domain: string, ip: string): Promise<{
       type: "A",
       name: `www.${domain}`,
       content: ip,
-      proxied: wwwRecord.proxied,
+      proxied: proxied ?? wwwRecord.proxied,
       ttl: wwwRecord.ttl,
     });
     result.wwwRecord = { action: "updated", from: wwwRecord.content };
@@ -210,10 +217,20 @@ export async function syncDomainDns(domain: string, ip: string): Promise<{
       type: "CNAME",
       name: `www.${domain}`,
       content: domain,
-      proxied: wwwRecord.proxied,
+      proxied: proxied ?? wwwRecord.proxied,
       ttl: wwwRecord.ttl,
     });
     result.wwwRecord = { action: "updated", from: wwwRecord.content };
+  } else if (proxied !== undefined && wwwRecord.proxied !== proxied) {
+    // Proxy state mismatch — flip it without touching content
+    await updateDnsRecord(zone.id, wwwRecord.id, {
+      type: wwwRecord.type,
+      name: wwwRecord.name,
+      content: wwwRecord.content,
+      proxied,
+      ttl: wwwRecord.ttl,
+    });
+    result.wwwRecord = { action: "updated", from: `proxied=${wwwRecord.proxied}` };
   }
 
   return result;

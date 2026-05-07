@@ -93,18 +93,9 @@ function fmtCount(n: number | undefined): string | null {
 
 const MENU_GROUPS: NavGroup[] = [
   {
-    label: "DATA",
+    label: "KELOLA",
     items: [
       { title: "Dasbor", href: "/", icon: LayoutDashboard, tourId: "nav-dashboard" },
-      {
-        title: "Server",
-        href: "/servers",
-        icon: Server,
-        tourId: "nav-server",
-        badge: (s) => fmtCount(s?.totalServers),
-        badgeTone: () => "teal",
-        adminOnly: true,
-      },
       {
         title: "Domain",
         href: "/domains",
@@ -121,27 +112,16 @@ const MENU_GROUPS: NavGroup[] = [
         badge: (s) => fmtCount(s?.totalArticles),
         badgeTone: () => "amber",
       },
-    ],
-  },
-  {
-    label: "CONTENT",
-    items: [
       { title: "Tema", href: "/themes", icon: Palette, tourId: "nav-themes" },
       {
         title: "Backlink",
         href: "/backlinks",
         icon: Link2,
         tourId: "nav-backlinks",
-        badge: (s) =>
-          s ? `${s.todayBacklinks}/${s.backlinkDailyLimit}` : null,
+        badge: (s) => s ? `${s.todayBacklinks}/${s.backlinkDailyLimit}` : null,
         badgeTone: () => "pink",
         adminOnly: true,
       },
-    ],
-  },
-  {
-    label: "OPERATIONS",
-    items: [
       {
         title: "Deploy",
         href: "/deploy",
@@ -150,13 +130,22 @@ const MENU_GROUPS: NavGroup[] = [
         badge: (s) => fmtCount(s?.deployedDomains),
         badgeTone: () => "teal",
       },
-      { title: "Cloudflare", href: "/cloudflare", icon: Cloud, tourId: "nav-cloudflare" },
-      { title: "Import", href: "/import", icon: Upload, tourId: "nav-import" },
     ],
   },
   {
-    label: "MONITORING",
+    label: "SISTEM",
     items: [
+      {
+        title: "Server",
+        href: "/servers",
+        icon: Server,
+        tourId: "nav-server",
+        badge: (s) => fmtCount(s?.totalServers),
+        badgeTone: () => "teal",
+        adminOnly: true,
+      },
+      { title: "Import", href: "/import", icon: Upload, tourId: "nav-import" },
+      { title: "Cloudflare", href: "/cloudflare", icon: Cloud, tourId: "nav-cloudflare" },
       {
         title: "Health Check",
         href: "/health-check",
@@ -165,7 +154,13 @@ const MENU_GROUPS: NavGroup[] = [
         badge: (s) => (s?.deadDomains ? fmtCount(s.deadDomains) : null),
         badgeTone: (s) => (s && s.deadDomains > 0 ? "red" : "muted"),
       },
-      { title: "Google Ping", href: "/google-ping", icon: Search, tourId: "nav-ping" },
+      {
+        title: "Scheduler",
+        href: "/scheduler",
+        icon: Clock,
+        tourId: "nav-scheduler",
+        pulse: (s) => !!s?.schedulerRunning,
+      },
       {
         title: "Index Monitor",
         href: "/index-monitor",
@@ -174,13 +169,7 @@ const MENU_GROUPS: NavGroup[] = [
         badge: (s) => fmtCount(s?.indexedDomains),
         badgeTone: () => "lime",
       },
-      {
-        title: "Scheduler",
-        href: "/scheduler",
-        icon: Clock,
-        tourId: "nav-scheduler",
-        pulse: (s) => !!s?.schedulerRunning,
-      },
+      { title: "Google Ping", href: "/google-ping", icon: Search, tourId: "nav-ping" },
       {
         title: "Activity Log",
         href: "/activity-log",
