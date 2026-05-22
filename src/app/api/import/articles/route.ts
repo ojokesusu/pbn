@@ -43,6 +43,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Empty file" }, { status: 400 });
     }
 
+    // Sanity-check ZIP signature (XLSX = OOXML zip container). First 4 bytes should be 50 4B 03 04 ("PK..").
+    const sig = buffer.subarray(0, 4).toString("hex").toLowerCase();
+    if (!sig.startsWith("504b")) {
+      return NextResponse.json({
+        error: `File bukan XLSX valid (header ${sig}, expected 504b...). Size ${buffer.length} bytes. Cek file tidak rusak / format benar.`,
+      }, { status: 400 });
+    }
+
     const wb = XLSX.read(buffer, { type: "buffer" });
 
     const sheetName = wb.SheetNames.find(n => n.toLowerCase() === "articles");
