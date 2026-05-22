@@ -128,10 +128,11 @@ export default function ImportPage() {
     setArticleError(null)
     setArticleResults(null)
     try {
-      const fd = new FormData()
-      fd.append("file", articleFile)
-      fd.append("action", "preview")
-      const res = await fetch("/api/import/articles", { method: "POST", body: fd })
+      const res = await fetch("/api/import/articles", {
+        method: "POST",
+        headers: { "content-type": "application/octet-stream", "x-action": "preview" },
+        body: articleFile,
+      })
       const data = await res.json()
       if (!res.ok) { setArticleError(data.error || "Preview gagal"); return }
       setArticlePreview(data)
@@ -146,10 +147,11 @@ export default function ImportPage() {
     setArticleLoading(true)
     setArticleError(null)
     try {
-      const fd = new FormData()
-      fd.append("file", articleFile)
-      fd.append("action", "import")
-      const res = await fetch("/api/import/articles", { method: "POST", body: fd })
+      const res = await fetch("/api/import/articles", {
+        method: "POST",
+        headers: { "content-type": "application/octet-stream", "x-action": "import" },
+        body: articleFile,
+      })
       const data = await res.json()
       if (!res.ok) { setArticleError(data.error || "Import gagal"); return }
       setArticleResults(data)

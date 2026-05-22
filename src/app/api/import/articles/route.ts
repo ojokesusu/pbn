@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import * as XLSX from "xlsx";
 
+export const maxDuration = 300;
+export const dynamic = "force-dynamic";
+
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -19,13 +22,27 @@ function cleanString(val: unknown): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-    const action = (formData.get("action") as string) ?? "import";
+    const contentType = req.headers.get("content-type") ?? "";
+    let buffer: Buffer;
+    let action: string;
 
-    if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    if (contentType.startsWith("application/octet-stream") || contentType.includes("spreadsheet")) {
+      // Raw binary upload — bypass FormData parsing limit (Next.js multipart caps at ~4MB)
+      buffer = Buffer.from(await req.arrayBuffer());
+      action = req.headers.get("x-action") ?? "import";
+    } else {
+      // FormData fallback (legacy / small files)
+      const formData = await req.formData();
+      const file = formData.get("file") as File | null;
+      action = (formData.get("action") as string) ?? "import";
+      if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
+      buffer = Buffer.from(await file.arrayBuffer());
+    }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    if (buffer.length === 0) {
+      return NextResponse.json({ error: "Empty file" }, { status: 400 });
+    }
+
     const wb = XLSX.read(buffer, { type: "buffer" });
 
     const sheetName = wb.SheetNames.find(n => n.toLowerCase() === "articles");
