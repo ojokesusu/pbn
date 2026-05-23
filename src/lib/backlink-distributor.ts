@@ -10,6 +10,11 @@
 //   3. Per-domain cap — max maxPerDomain placements per domain.
 //   4. Per-article cap — max maxPerArticle placements per article.
 //   5. Anchor distribution — 60% branded, 30% naked URL, 10% keyword.
+//   6. Niche/topic match — when ANCHOR_CATEGORY_MATCH=true, backlinks with
+//      a niche (e.g. "igaming") only land on articles with a matching
+//      topicCategory (e.g. "olahraga", "hiburan"). Prevents an "igaming"
+//      anchor showing up inside a "kriminal" article. Empty niche or empty
+//      article category → legacy behavior (match all).
 
 import { prisma } from "./db";
 
@@ -24,6 +29,35 @@ const TYPE_PRIORITY: Record<string, number> = {
 function priorityOf(type: string | null | undefined): number {
   if (!type) return 0;
   return TYPE_PRIORITY[type.trim()] ?? 0;
+}
+
+// Niche → allowed article topicCategory whitelist.
+// "*" means matches anything. Unknown niches are permissive (fall through to
+// legacy match) so adding a new niche on a backlink without updating this map
+// never silently breaks distribution.
+const NICHE_ALLOWED_CATEGORIES: Record<string, string[]> = {
+  igaming:   ["olahraga", "hiburan", "casino", "umum"],
+  finance:   ["ekonomi", "bisnis", "investasi", "umum"],
+  health:    ["kesehatan", "lifestyle", "umum"],
+  ecommerce: ["bisnis", "teknologi", "lifestyle", "umum"],
+  travel:    ["wisata", "lifestyle", "umum"],
+  tech:      ["teknologi", "umum"],
+  news:      ["*"],
+};
+
+function nicheMatchesArticle(
+  niche: string | null | undefined,
+  articleCategory: string | null | undefined
+): boolean {
+  const n = (niche || "").trim().toLowerCase();
+  const c = (articleCategory || "").trim().toLowerCase();
+  // Legacy compat: either side untagged → match (don't block existing data)
+  if (!n || !c) return true;
+  const allowed = NICHE_ALLOWED_CATEGORIES[n];
+  // Unknown niche → permissive
+  if (!allowed) return true;
+  if (allowed.includes("*")) return true;
+  return allowed.includes(c);
 }
 
 function extractCandidateWords(htmlContent: string): string[] {
@@ -171,6 +205,8 @@ export async function distributeBacklinks(): Promise<DistributeResult> {
     return Math.random() - 0.5;
   });
 
+  const enableNicheMatch = process.env.ANCHOR_CATEGORY_MATCH === "true";
+
   let totalPlaced = 0;
   const details: DistributeResult["details"] = [];
 
@@ -194,7 +230,11 @@ export async function distributeBacklinks(): Promise<DistributeResult> {
       if (article.backlinkPlacements.length >= config.maxPerArticle) continue;
 
       const existingBacklinkIds = new Set(article.backlinkPlacements.map((p) => p.backlinkId));
-      const availableBacklink = sortedBacklinks.find((bl) => !existingBacklinkIds.has(bl.id));
+      const availableBacklink = sortedBacklinks.find((bl) => {
+        if (existingBacklinkIds.has(bl.id)) return false;
+        if (enableNicheMatch && !nicheMatchesArticle(bl.niche, article.topicCategory)) return false;
+        return true;
+      });
       if (!availableBacklink) continue;
 
       let anchorText = availableBacklink.anchorText;

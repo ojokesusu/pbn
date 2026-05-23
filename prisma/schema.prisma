@@ -111,6 +111,7 @@ model Article {
   excerpt         String   @default("")
   categoryId      String?
   tags            String   @default("")
+  topicCategory   String   @default("")
   authorName      String   @default("Admin")
   featuredImage   String   @default("")
   status          String   @default("draft")
@@ -161,6 +162,7 @@ model Backlink {
   anchorText  String   @default("")
   targetUrl   String
   type        String   @default("")
+  niche       String   @default("")
   status      String   @default("active")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
