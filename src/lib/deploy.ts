@@ -68,12 +68,12 @@ export async function deployDomain(domainId: string): Promise<DeployResult> {
       };
     }
 
-    // Determine FTP remote path
+    // Determine FTP remote path.
+    // cPanel-style: per-domain FTP user, /public_html is the docroot.
+    // Shared server (e.g. Contabo + Pure-FTPd): one FTP user, vhosts at /{domain}.
     const domainName = domain.url.replace(/^https?:\/\//, "").replace(/\/+$/, "");
-    const remotePath =
-      domainName.includes(domain.server.username) || domain.server.username !== "pbnpgkeo"
-        ? "/public_html"
-        : `/${domainName}`;
+    const isCPanelStyle = domainName.includes(domain.server.username);
+    const remotePath = isCPanelStyle ? "/public_html" : `/${domainName}`;
 
     await prisma.deployLog.update({
       where: { id: deployLog.id },
