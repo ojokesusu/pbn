@@ -9,11 +9,18 @@
 //   2. Daily anti-spam limit — max N placements per 24h (BacklinkConfig.maxPerDay).
 //   3. Per-domain cap — max maxPerDomain placements per domain.
 //   4. Per-article cap — max maxPerArticle placements per article.
-//   5. Anchor distribution — 60% branded, 30% naked URL, 10% keyword.
+//   5. Anchor text MUST be a natural word/phrase already present in the
+//      article body. The <a> wraps an existing token in place. Never
+//      insert foreign text (hostnames, raw URLs, "Baca selengkapnya di…").
+//      If no natural anchor can be placed in an article, skip it — the
+//      distributor will move on to the next eligible article.
+//      Explicit Backlink.anchorText is honored ONLY if that string already
+//      appears naturally in the article body. Otherwise fall through to
+//      random-word extraction from the article.
 //   6. Niche/topic match — when ANCHOR_CATEGORY_MATCH=true, backlinks with
 //      a niche (e.g. "igaming") only land on articles with a matching
 //      topicCategory (e.g. "olahraga", "hiburan"). Prevents an "igaming"
-//      anchor showing up inside a "kriminal" article. Empty niche or empty
+//      backlink landing in a "kriminal" article. Empty niche or empty
 //      article category → legacy behavior (match all).
 
 import { prisma } from "./db";
@@ -237,51 +244,36 @@ export async function distributeBacklinks(): Promise<DistributeResult> {
       });
       if (!availableBacklink) continue;
 
-      let anchorText = availableBacklink.anchorText;
-      if (!anchorText) {
-        const roll = Math.random();
-        if (roll < 0.6) {
-          try {
-            anchorText = new URL(availableBacklink.targetUrl).hostname.replace(/^www\./, "");
-          } catch {
-            anchorText = availableBacklink.targetUrl;
-          }
-        } else if (roll < 0.9) {
-          anchorText = availableBacklink.targetUrl;
-        } else {
-          const candidates = extractCandidateWords(article.content);
-          if (candidates.length > 0) {
-            anchorText = candidates[0];
-          } else {
-            try {
-              anchorText = new URL(availableBacklink.targetUrl).hostname.replace(/^www\./, "");
-            } catch {
-              anchorText = availableBacklink.targetUrl;
-            }
-          }
+      // Build candidate list (rule #5): explicit anchor only if it appears
+      // naturally in the body, then fall back to random words/phrases
+      // extracted from the article itself.
+      const candidates: string[] = [];
+      const explicitAnchor = (availableBacklink.anchorText || "").trim();
+      if (explicitAnchor) {
+        const escaped = explicitAnchor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        if (new RegExp(`\\b${escaped}\\b`, "i").test(article.content)) {
+          candidates.push(explicitAnchor);
+        }
+      }
+      candidates.push(...extractCandidateWords(article.content).slice(0, 20));
+
+      let newContent: string | null = null;
+      let anchorText = "";
+      for (const candidate of candidates) {
+        const attempt = insertBacklinkIntoContent(
+          article.content,
+          candidate,
+          availableBacklink.targetUrl
+        );
+        if (attempt) {
+          newContent = attempt;
+          anchorText = candidate;
+          break;
         }
       }
 
-      let newContent: string | null = insertBacklinkIntoContent(
-        article.content,
-        anchorText,
-        availableBacklink.targetUrl
-      );
-
-      if (!newContent) {
-        const link = `<a href="${availableBacklink.targetUrl}" target="_blank" rel="noopener">${anchorText}</a>`;
-        const paragraphs = article.content.match(/<\/p>/g);
-        if (paragraphs && paragraphs.length > 1) {
-          const insertIdx = Math.floor(Math.random() * (paragraphs.length - 1)) + 1;
-          let count = 0;
-          newContent = article.content.replace(/<\/p>/g, (match) => {
-            count++;
-            if (count === insertIdx) return ` Baca selengkapnya di ${link}.</p>`;
-            return match;
-          });
-        }
-      }
-
+      // No natural anchor placement possible → skip article. Never force
+      // a foreign string insertion (rule #5).
       if (!newContent) continue;
 
       await prisma.article.update({
