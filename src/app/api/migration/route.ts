@@ -77,6 +77,25 @@ export async function GET() {
     })
   );
 
+  // 3-PHASE BREAKDOWN
+  // Phase 1: scrape-based content (Bucket 1 + 2 + Wayback recovery)
+  // Phase 2: AI-gen content (domain registered + serverId, but no articles)
+  // Phase 3: re-probe blocked Wayback (87 Bucket 2 + 271 Bucket 1 = 358)
+  const phase2Pending = await prisma.domain.count({
+    where: { articles: { none: {} }, serverId: { in: [SERVER_C02, SERVER_C03] } },
+  });
+  const phase3Blocked = 358;
+
+  const phases = [
+    { name: "Phase 1: Scrape Content", scope: totalDeployable, status: "active", color: "#14b8a6" },
+    { name: "Phase 2: AI Generate", scope: phase2Pending, status: "pending", color: "#f59e0b" },
+    { name: "Phase 3: Re-probe Wayback", scope: phase3Blocked, status: "future", color: "#8b5cf6" },
+  ];
+
+  const ultimateScope = totalDeployable + phase2Pending + phase3Blocked;
+  const ultimateRemainingDays = Math.ceil((queue + phase2Pending + phase3Blocked) / PACE_PER_DAY);
+  const ultimateEta = new Date(Date.now() + ultimateRemainingDays * 24 * 60 * 60 * 1000);
+
   return NextResponse.json({
     totals: {
       acquisition: TOTAL_ACQUISITION,
@@ -84,9 +103,13 @@ export async function GET() {
       deployed,
       queue,
       articles: articlesTotal,
+      ultimateScope,
+      ultimateRemainingDays,
+      ultimateEta: ultimateEta.toISOString().slice(0, 10),
     },
     progress: {
       pct: totalDeployable > 0 ? Math.round((deployed / totalDeployable) * 100) : 0,
+      ultimatePct: ultimateScope > 0 ? Math.round((deployed / ultimateScope) * 100) : 0,
       remainingDays,
       etaDate: etaDate.toISOString().slice(0, 10),
       pacePerDay: PACE_PER_DAY,
@@ -98,6 +121,7 @@ export async function GET() {
         { server: "Contabo-03", count: c03Count },
       ],
     },
+    phases,
     daily: dailyDeploys,
     recent: recentDeployDetails,
   });

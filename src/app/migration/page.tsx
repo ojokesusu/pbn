@@ -11,9 +11,10 @@ import {
 } from "recharts";
 
 type Stats = {
-  totals: { acquisition: number; deployable: number; deployed: number; queue: number; articles: number };
-  progress: { pct: number; remainingDays: number; etaDate: string; pacePerDay: number };
+  totals: { acquisition: number; deployable: number; deployed: number; queue: number; articles: number; ultimateScope: number; ultimateRemainingDays: number; ultimateEta: string };
+  progress: { pct: number; ultimatePct: number; remainingDays: number; etaDate: string; pacePerDay: number };
   pool: { genreBreakdown: { genre: string; count: number }[]; serverDistribution: { server: string; count: number }[] };
+  phases: { name: string; scope: number; status: string; color: string }[];
   daily: { date: string; count: number }[];
   recent: { deployedAt: string; name: string; genre: string; server: string; filesChanged: number }[];
 };
@@ -85,29 +86,79 @@ export default function MigrationPage() {
             </CardHeader>
             <CardContent>
               <div className="text-4xl font-bold text-pink-600">{t.articles.toLocaleString()}</div>
-              <div className="text-xs text-muted-foreground mt-1">{t.acquisition} domain acquisition</div>
+              <div className="text-xs text-muted-foreground mt-1">Phase 1 scrape-based</div>
             </CardContent>
           </Card>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Progress Migration</CardTitle>
+            <CardTitle>Progress Migration (Phase 1 + Ultimate Goal)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div>
+              <div className="flex items-center justify-between text-sm mb-1">
+                <span className="font-medium">Phase 1 — Scrape Content ({t.deployable} domain)</span>
+                <span className="text-muted-foreground">{p.pct}% • target {p.etaDate}</span>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="flex-1 h-5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all"
+                    style={{ width: `${p.pct}%` }}
+                  />
+                </div>
+                <div className="text-lg font-bold tabular-nums w-16 text-right">{p.pct}%</div>
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between text-sm mb-1">
+                <span className="font-medium">Ultimate — All 1858 Acquisition ({t.ultimateScope} eventual deploy)</span>
+                <span className="text-muted-foreground">{p.ultimatePct}% • target {t.ultimateEta}</span>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="flex-1 h-5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all"
+                    style={{ width: `${p.ultimatePct}%` }}
+                  />
+                </div>
+                <div className="text-lg font-bold tabular-nums w-16 text-right">{p.ultimatePct}%</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-4 pt-2 text-sm text-muted-foreground border-t">
+              <div>Live: <strong className="text-foreground">{t.deployed}</strong></div>
+              <div>Queue (P1): <strong className="text-foreground">{t.queue}</strong></div>
+              <div>Ultimate: <strong className="text-foreground">{t.ultimateScope}</strong></div>
+              <div>Acquisition: <strong className="text-foreground">{t.acquisition}</strong></div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>3-Phase Strategy</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-4">
-              <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {data.phases.map((phase, i) => (
                 <div
-                  className="h-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all"
-                  style={{ width: `${p.pct}%` }}
-                />
-              </div>
-              <div className="text-2xl font-bold tabular-nums w-20 text-right">{p.pct}%</div>
-            </div>
-            <div className="grid grid-cols-3 gap-4 mt-4 text-sm text-muted-foreground">
-              <div>Deployed: <strong className="text-foreground">{t.deployed}</strong></div>
-              <div>Queue: <strong className="text-foreground">{t.queue}</strong></div>
-              <div>Total: <strong className="text-foreground">{t.deployable}</strong></div>
+                  key={i}
+                  className="rounded-lg border p-4"
+                  style={{ borderColor: phase.color, background: `${phase.color}10` }}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <Badge style={{ background: phase.color, color: "white" }}>{phase.status}</Badge>
+                    <span className="text-xs text-muted-foreground">{phase.scope} domain</span>
+                  </div>
+                  <div className="font-medium text-sm">{phase.name}</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {phase.status === "active" && "Scrape Bucket 1 + 2 + Wayback recovery"}
+                    {phase.status === "pending" && "AI generate setelah Phase 1 selesai"}
+                    {phase.status === "future" && "Re-probe Wayback Q4 2026 untuk rescue tambahan"}
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
