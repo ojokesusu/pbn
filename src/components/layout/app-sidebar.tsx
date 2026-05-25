@@ -22,6 +22,7 @@ import {
   Eye,
   LogOut,
   Activity,
+  Map as MapIcon,
 } from "lucide-react"
 import { useMe } from "@/hooks/use-me"
 import { AvatarDisplay } from "@/components/ui/avatar-display"
@@ -128,6 +129,14 @@ const MENU_GROUPS: NavGroup[] = [
         icon: Rocket,
         tourId: "nav-deploy",
         badge: (s) => fmtCount(s?.deployedDomains),
+        badgeTone: () => "teal",
+      },
+      {
+        title: "Migrasi",
+        href: "/migration",
+        icon: MapIcon,
+        tourId: "nav-migration",
+        badge: (s) => s ? `${s.deployedDomains}/${s.totalDomains}` : null,
         badgeTone: () => "teal",
       },
     ],

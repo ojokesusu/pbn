@@ -24,6 +24,7 @@
     "prisma": "^6.19.2",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "recharts": "^3.8.1",
     "shadcn": "^4.1.1",
     "slugify": "^1.6.8",
     "tailwind-merge": "^3.5.0",
