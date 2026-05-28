@@ -41,6 +41,48 @@ export async function GET() {
     where: { articles: { some: { status: "published" } }, serverId: SERVER_C03 },
   });
 
+  // FULL server distribution (all active servers w domains > 0)
+  const allServerDomains = await prisma.domain.groupBy({
+    by: ["serverId"],
+    where: { serverId: { not: null } },
+    _count: { _all: true },
+  });
+  const serverIds = allServerDomains.map((s) => s.serverId).filter((id): id is string => id !== null);
+  const serverInfo = await prisma.server.findMany({
+    where: { id: { in: serverIds } },
+    select: { id: true, label: true, host: true, status: true },
+  });
+  const serverMap = new Map(serverInfo.map((s) => [s.id, s]));
+  const allServerDistribution = allServerDomains
+    .map((s) => {
+      const info = serverMap.get(s.serverId!);
+      return {
+        serverId: s.serverId,
+        label: info?.label ?? "unknown",
+        host: info?.host ?? "?",
+        status: info?.status ?? "?",
+        count: s._count._all,
+      };
+    })
+    .sort((a, b) => b.count - a.count);
+
+  // Pilot servers (currently 0 domains, but registered)
+  const pilotServers = await prisma.server.findMany({
+    where: { label: { in: ["IDCH-JKT01", "Biznet-Java01", "Rumahweb-JKT01"] } },
+    select: { id: true, label: true, host: true, status: true, _count: { select: { domains: true } } },
+  });
+  for (const p of pilotServers) {
+    if (!serverMap.has(p.id)) {
+      allServerDistribution.push({
+        serverId: p.id,
+        label: p.label,
+        host: p.host,
+        status: p.status,
+        count: p._count.domains,
+      });
+    }
+  }
+
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const recentLogs = await prisma.deployLog.findMany({
     where: { status: "success", action: "deploy", deployedAt: { gte: thirtyDaysAgo } },
@@ -120,6 +162,7 @@ export async function GET() {
         { server: "Contabo-02", count: c02Count },
         { server: "Contabo-03", count: c03Count },
       ],
+      allServers: allServerDistribution,
     },
     phases,
     daily: dailyDeploys,

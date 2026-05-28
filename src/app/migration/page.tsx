@@ -13,7 +13,11 @@ import {
 type Stats = {
   totals: { acquisition: number; deployable: number; deployed: number; queue: number; articles: number; ultimateScope: number; ultimateRemainingDays: number; ultimateEta: string };
   progress: { pct: number; ultimatePct: number; remainingDays: number; etaDate: string; pacePerDay: number };
-  pool: { genreBreakdown: { genre: string; count: number }[]; serverDistribution: { server: string; count: number }[] };
+  pool: {
+    genreBreakdown: { genre: string; count: number }[];
+    serverDistribution: { server: string; count: number }[];
+    allServers: { serverId: string; label: string; host: string; status: string; count: number }[];
+  };
   phases: { name: string; scope: number; status: string; color: string }[];
   daily: { date: string; count: number }[];
   recent: { deployedAt: string; name: string; genre: string; server: string; filesChanged: number }[];
@@ -183,7 +187,7 @@ export default function MigrationPage() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Distribusi Server</CardTitle>
+              <CardTitle>Distribusi Server (Active)</CardTitle>
             </CardHeader>
             <CardContent style={{ height: 280 }}>
               <ResponsiveContainer>
@@ -198,6 +202,39 @@ export default function MigrationPage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Semua Server &amp; Distribusi Domain ({data.pool.allServers.length} server)</CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">Realtime — auto-refresh 30 detik. Klik nama server buat detail.</p>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Label</TableHead>
+                  <TableHead>Host (IP)</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Domain Count</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.pool.allServers.map((s) => (
+                  <TableRow key={s.serverId}>
+                    <TableCell className="font-medium">{s.label}</TableCell>
+                    <TableCell className="font-mono text-xs">{s.host}</TableCell>
+                    <TableCell>
+                      <Badge variant={s.status === "active" ? "default" : "secondary"}>{s.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant="outline" className="font-mono">{s.count}</Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
