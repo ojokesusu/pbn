@@ -187,13 +187,14 @@ export default function MigrationPage() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Distribusi Server (Active)</CardTitle>
+              <CardTitle>Distribusi Server (Top 15)</CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">Server dengan domain count terbanyak (total {data.pool.allServers.length} server)</p>
             </CardHeader>
             <CardContent style={{ height: 280 }}>
               <ResponsiveContainer>
-                <BarChart data={data.pool.serverDistribution}>
+                <BarChart data={data.pool.allServers.slice(0, 15)}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="server" stroke="var(--muted-foreground)" />
+                  <XAxis dataKey="label" stroke="var(--muted-foreground)" angle={-30} textAnchor="end" height={70} fontSize={11} />
                   <YAxis stroke="var(--muted-foreground)" />
                   <Tooltip />
                   <Bar dataKey="count" fill="#14b8a6" radius={[8, 8, 0, 0]} />
