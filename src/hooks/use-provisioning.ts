@@ -174,6 +174,54 @@ export function useCapacity() {
   return state;
 }
 
+export type WorkerHeartbeatRow = {
+  workerId: string;
+  lastBeatAt: string;
+  runningTaskIds: string[];
+  status: string;
+  hostname: string;
+  pid: number;
+  startedAt: string;
+  isAlive: boolean;
+  staleSeconds: number;
+};
+
+export function useWorkers() {
+  const [state, setState] = useState<FetchState<WorkerHeartbeatRow[]>>({
+    data: null,
+    loading: true,
+    error: null,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchData = async () => {
+      try {
+        const res = await fetch("/api/provisioning/workers");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = (await res.json()) as { workers: WorkerHeartbeatRow[] };
+        if (!cancelled)
+          setState({ data: json.workers ?? [], loading: false, error: null });
+      } catch (err) {
+        if (!cancelled)
+          setState((s) => ({
+            data: s.data,
+            loading: false,
+            error: err instanceof Error ? err.message : String(err),
+          }));
+      }
+    };
+    fetchData();
+    const id = setInterval(fetchData, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  return state;
+}
+
 export function useDeployQueue() {
   const [state, setState] = useState<FetchState<DeployQueueItem[]>>({
     data: null,

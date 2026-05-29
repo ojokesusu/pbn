@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { denyIfNotAdmin } from "@/lib/auth";
+import { encryptPassword } from "@/lib/crypto";
 
 export const dynamic = "force-dynamic";
-
-// TODO: Replace base64 obfuscation with proper symmetric encryption (e.g. AES-256-GCM
-// using a server-side key from env) before exposing this DB beyond the private network.
-function obfuscatePassword(plain: string): string {
-  return Buffer.from(plain, "utf8").toString("base64");
-}
 
 interface TargetInput {
   label?: unknown;
@@ -125,11 +120,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let sshPassEnc: string;
+    try {
+      sshPassEnc = encryptPassword(sshPassword);
+    } catch (err) {
+      console.error(
+        `Failed to encrypt sshPassword for targets[${i}]:`,
+        err
+      );
+      const msg = err instanceof Error ? err.message : String(err);
+      return NextResponse.json(
+        {
+          error:
+            "Server encryption key is misconfigured. Set PROVISION_PASSWORD_KEY (64-char hex) in the Railway env and retry.",
+          detail: msg,
+        },
+        { status: 500 }
+      );
+    }
+
     normalizedTargets.push({
       label,
       host,
       sshUser,
-      sshPassEnc: obfuscatePassword(sshPassword),
+      sshPassEnc,
     });
   }
 

@@ -24,6 +24,8 @@ import {
   Activity,
   Map as MapIcon,
   Terminal,
+  ListOrdered,
+  Zap,
 } from "lucide-react"
 import { useMe } from "@/hooks/use-me"
 import { AvatarDisplay } from "@/components/ui/avatar-display"
@@ -140,6 +142,20 @@ const MENU_GROUPS: NavGroup[] = [
         tourId: "nav-migration",
         badge: (s) => s ? `${s.deployedDomains}/${s.totalDomains}` : null,
         badgeTone: () => "teal",
+      },
+      {
+        title: "Queue",
+        href: "/provisioning/queue",
+        icon: ListOrdered,
+        tourId: "nav-provisioning-queue",
+        adminOnly: true,
+      },
+      {
+        title: "Stress Tests",
+        href: "/provisioning/stress-tests",
+        icon: Zap,
+        tourId: "nav-stress-tests",
+        adminOnly: true,
       },
     ],
   },

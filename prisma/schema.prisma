@@ -34,6 +34,7 @@ model Server {
   provisionTasks    ProvisionTask[]
   healthChecks      HealthCheck[]
   deployQueueItems  DeployQueueItem[]
+  stressTests       StressTestRun[]
 
   @@schema("pbn")
 }
@@ -449,5 +450,49 @@ model DeployQueueItem {
   server          Server?  @relation(fields: [serverId], references: [id], onDelete: SetNull)
 
   @@index([status, scheduledAt])
+  @@schema("pbn")
+}
+
+model StressTestRun {
+  id                 String   @id @default(cuid())
+  serverId           String
+  dummyCount         Int
+  durationSec        Int
+  concurrentWorkers  Int      @default(5)
+  status             String   @default("pending")
+  startedAt          DateTime?
+  completedAt        DateTime?
+  ramBaselineMb      Int      @default(0)
+  ramPeakMb          Int      @default(0)
+  ramAvgMb           Int      @default(0)
+  swapUsedPeakMb     Int      @default(0)
+  oomEvents          Int      @default(0)
+  requestsTotal      Int      @default(0)
+  avgResponseMs      Int      @default(0)
+  errors             Int      @default(0)
+  verdict            String   @default("")
+  recommendation     String   @default("")
+  log                String   @default("")
+  errorMessage       String   @default("")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  server             Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, createdAt])
+  @@schema("pbn")
+}
+
+model WorkerHeartbeat {
+  id              String   @id @default(cuid())
+  workerId        String   @unique
+  lastBeatAt      DateTime @default(now())
+  runningTaskIds  String   @default("[]")
+  status          String   @default("running")
+  hostname        String   @default("")
+  pid             Int      @default(0)
+  startedAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
   @@schema("pbn")
 }

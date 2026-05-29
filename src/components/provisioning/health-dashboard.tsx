@@ -1,6 +1,19 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { HealthServer } from "@/types/provisioning";
 
 type Props = { servers: HealthServer[] };
@@ -61,6 +74,78 @@ function Pill({ label, ok }: { label: string; ok: boolean }) {
 
 export default function HealthDashboard({ servers }: Props) {
   const list = Array.isArray(servers) ? servers : [];
+  const router = useRouter();
+
+  const [stressTarget, setStressTarget] = useState<HealthServer | null>(null);
+  const [dummyCount, setDummyCount] = useState<number>(15);
+  const [durationSec, setDurationSec] = useState<number>(1800);
+  const [concurrentWorkers, setConcurrentWorkers] = useState<number>(5);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function openStressDialog(s: HealthServer) {
+    setStressTarget(s);
+    setDummyCount(15);
+    setDurationSec(1800);
+    setConcurrentWorkers(5);
+    setError(null);
+  }
+
+  function closeStressDialog() {
+    if (submitting) return;
+    setStressTarget(null);
+    setError(null);
+  }
+
+  async function submitStressTest() {
+    if (!stressTarget) return;
+    setError(null);
+
+    if (!Number.isFinite(dummyCount) || dummyCount < 1 || dummyCount > 30) {
+      setError("dummyCount harus 1-30");
+      return;
+    }
+    if (!Number.isFinite(durationSec) || durationSec < 60 || durationSec > 3600) {
+      setError("durationSec harus 60-3600 detik (max 1 jam)");
+      return;
+    }
+    if (
+      !Number.isFinite(concurrentWorkers) ||
+      concurrentWorkers < 1 ||
+      concurrentWorkers > 20
+    ) {
+      setError("concurrentWorkers harus 1-20");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/provisioning/stress-tests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serverId: stressTarget.serverId,
+          dummyCount,
+          durationSec,
+          concurrentWorkers,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json?.error || `HTTP ${res.status}`);
+      }
+      const id = json?.stressTest?.id;
+      if (!id) {
+        throw new Error("Response tidak mengandung stressTest.id");
+      }
+      setStressTarget(null);
+      router.push(`/provisioning/stress-tests/${id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   if (list.length === 0) {
     return (
@@ -157,11 +242,106 @@ export default function HealthDashboard({ servers }: Props) {
                   <span className="font-mono">Load {(s.loadAvg1 ?? 0).toFixed(2)}</span>
                   <span>{relativeTime(s.checkedAt)}</span>
                 </div>
+
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => openStressDialog(s)}
+                  className="w-full border-teal-300 text-teal-700 hover:bg-teal-50 hover:text-teal-800 dark:border-teal-700 dark:text-teal-400 dark:hover:bg-teal-950"
+                >
+                  Run Stress Test
+                </Button>
               </CardContent>
             </Card>
           );
         })}
       </div>
+
+      <Dialog
+        open={stressTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) closeStressDialog();
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Stress Test: {stressTarget?.label ?? ""}
+            </DialogTitle>
+            <DialogDescription>
+              Spawn dummy domains, hit endpoints, ukur RAM/swap/OOM untuk capacity planning.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="dummyCount">
+                Dummy Count <span className="text-muted-foreground text-xs">(1-30)</span>
+              </Label>
+              <Input
+                id="dummyCount"
+                type="number"
+                min={1}
+                max={30}
+                value={dummyCount}
+                onChange={(e) => setDummyCount(Number(e.target.value))}
+                disabled={submitting}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="durationSec">
+                Duration (detik) <span className="text-muted-foreground text-xs">(60-3600 / max 1 jam)</span>
+              </Label>
+              <Input
+                id="durationSec"
+                type="number"
+                min={60}
+                max={3600}
+                value={durationSec}
+                onChange={(e) => setDurationSec(Number(e.target.value))}
+                disabled={submitting}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="concurrentWorkers">
+                Concurrent Workers <span className="text-muted-foreground text-xs">(1-20)</span>
+              </Label>
+              <Input
+                id="concurrentWorkers"
+                type="number"
+                min={1}
+                max={20}
+                value={concurrentWorkers}
+                onChange={(e) => setConcurrentWorkers(Number(e.target.value))}
+                disabled={submitting}
+              />
+            </div>
+
+            {error && (
+              <div className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
+                {error}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={closeStressDialog}
+              disabled={submitting}
+            >
+              Batal
+            </Button>
+            <Button
+              onClick={submitStressTest}
+              disabled={submitting}
+              className="bg-teal-600 text-white hover:bg-teal-700"
+            >
+              {submitting ? "Memulai..." : "Jalankan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
