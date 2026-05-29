@@ -23,6 +23,7 @@ import {
   LogOut,
   Activity,
   Map as MapIcon,
+  Terminal,
 } from "lucide-react"
 import { useMe } from "@/hooks/use-me"
 import { AvatarDisplay } from "@/components/ui/avatar-display"
@@ -55,6 +56,7 @@ type SidebarStats = {
   todayDeploys: number
   todayBacklinks: number
   backlinkDailyLimit: number
+  healthyServers?: number
 }
 
 type BadgeTone = "teal" | "lime" | "red" | "amber" | "purple" | "pink" | "muted"
@@ -150,6 +152,15 @@ const MENU_GROUPS: NavGroup[] = [
         icon: Server,
         tourId: "nav-server",
         badge: (s) => fmtCount(s?.totalServers),
+        badgeTone: () => "teal",
+        adminOnly: true,
+      },
+      {
+        title: "Provisioning",
+        href: "/provisioning",
+        icon: Terminal,
+        tourId: "nav-provisioning",
+        badge: (s) => (s ? `${s.healthyServers}/${s.totalServers}` : null),
         badgeTone: () => "teal",
         adminOnly: true,
       },
