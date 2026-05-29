@@ -15,15 +15,25 @@ model Server {
   label           String   @default("")
   name            String
   nameserver2     String   @default("")
-  host            String
+  host            String   @unique
   username        String
   password        String
   port            Int      @default(21)
   status          String   @default("active")
+  provider        String   @default("")
+  region          String   @default("")
+  tier            String   @default("")
+  stack           String   @default("")
+  domainCap       Int      @default(20)
+  lastHealthCheck DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   domains         Domain[]
+  provisionBatches  ProvisionBatch[]
+  provisionTasks    ProvisionTask[]
+  healthChecks      HealthCheck[]
+  deployQueueItems  DeployQueueItem[]
 
   @@schema("pbn")
 }
@@ -341,5 +351,103 @@ model DomainSchedule {
 
   domain          Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
 
+  @@schema("pbn")
+}
+
+model ProvisionBatch {
+  id              String   @id @default(cuid())
+  name            String
+  provider        String
+  region          String
+  tier            String
+  serverId        String?
+  totalTargets    Int      @default(0)
+  pendingCount    Int      @default(0)
+  runningCount    Int      @default(0)
+  completedCount  Int      @default(0)
+  failedCount     Int      @default(0)
+  status          String   @default("pending")
+  createdBy       String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  server          Server?         @relation(fields: [serverId], references: [id], onDelete: SetNull)
+  tasks           ProvisionTask[]
+
+  @@index([status, createdAt])
+  @@schema("pbn")
+}
+
+model ProvisionTask {
+  id              String   @id @default(cuid())
+  batchId         String
+  label           String
+  host            String
+  sshUser         String   @default("root")
+  sshPassEnc      String   @default("")
+  provider        String
+  region          String
+  tier            String
+  status          String   @default("pending")
+  progress        Int      @default(0)
+  currentStep     String   @default("")
+  log             String   @default("")
+  errorMessage    String   @default("")
+  startedAt       DateTime?
+  completedAt     DateTime?
+  resultJson      String   @default("")
+  serverId        String?
+  retries         Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  batch           ProvisionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  server          Server?        @relation(fields: [serverId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([batchId])
+  @@schema("pbn")
+}
+
+model HealthCheck {
+  id              String   @id @default(cuid())
+  serverId        String
+  olsRunning      Boolean  @default(false)
+  olsPid          Int?
+  phpVersion      String   @default("")
+  ftpStatus       String   @default("")
+  ramUsedMb       Int      @default(0)
+  ramTotalMb      Int      @default(0)
+  diskUsedGb      Int      @default(0)
+  diskTotalGb     Int      @default(0)
+  port80Listen    Boolean  @default(false)
+  port21Listen    Boolean  @default(false)
+  port7080Listen  Boolean  @default(false)
+  domainCount     Int      @default(0)
+  loadAvg1        Float    @default(0)
+  errorMessage    String   @default("")
+  checkedAt       DateTime @default(now())
+
+  server          Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, checkedAt])
+  @@schema("pbn")
+}
+
+model DeployQueueItem {
+  id              String   @id @default(cuid())
+  domainId        String   @unique
+  serverId        String?
+  priority        Int      @default(0)
+  status          String   @default("queued")
+  scheduledAt     DateTime?
+  attemptedAt     DateTime?
+  completedAt     DateTime?
+  errorMessage    String   @default("")
+  createdAt       DateTime @default(now())
+
+  server          Server?  @relation(fields: [serverId], references: [id], onDelete: SetNull)
+
+  @@index([status, scheduledAt])
   @@schema("pbn")
 }
