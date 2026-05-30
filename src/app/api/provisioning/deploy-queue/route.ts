@@ -145,14 +145,25 @@ export async function POST(request: Request) {
       }
       const prio = typeof priority === "number" ? priority : 0;
 
+      // Auto-propagate Domain.serverId when caller doesn't provide one.
+      const domainRows = await prisma.domain.findMany({
+        where: { id: { in: domainIds } },
+        select: { id: true, serverId: true },
+      });
+      const domainServerMap = new Map(
+        domainRows.map((d) => [d.id, d.serverId])
+      );
+
       await Promise.all(
-        domainIds.map((domainId) =>
-          prisma.deployQueueItem.upsert({
+        domainIds.map((domainId) => {
+          const resolvedServerId =
+            serverId ?? domainServerMap.get(domainId) ?? null;
+          return prisma.deployQueueItem.upsert({
             where: { domainId },
             update: {
               status: "queued",
               priority: prio,
-              ...(serverId ? { serverId } : {}),
+              ...(resolvedServerId ? { serverId: resolvedServerId } : {}),
               errorMessage: "",
               attemptedAt: null,
             },
@@ -160,10 +171,10 @@ export async function POST(request: Request) {
               domainId,
               status: "queued",
               priority: prio,
-              serverId: serverId ?? null,
+              serverId: resolvedServerId,
             },
-          })
-        )
+          });
+        })
       );
     } else if (action === "remove") {
       const { domainIds } = body as AddRemoveBody;
