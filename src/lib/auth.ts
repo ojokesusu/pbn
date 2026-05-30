@@ -1,5 +1,5 @@
 import { scryptSync, randomBytes, timingSafeEqual } from "crypto"
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { NextResponse } from "next/server"
 import { prisma } from "./db"
 
@@ -97,10 +97,30 @@ export async function getAdminUser() {
   return user
 }
 
+// Service token check — header X-Service-Token must equal PROVISION_SERVICE_TOKEN env.
+// Used by RDP worker (deploy_worker.py) to call admin-gated endpoints without a user
+// session cookie. Empty/missing env disables service-token auth entirely (fail-closed).
+async function isServiceTokenAuth(): Promise<boolean> {
+  const expected = process.env.PROVISION_SERVICE_TOKEN
+  if (!expected) return false
+  try {
+    const h = await headers()
+    const got = h.get("x-service-token")
+    if (!got || got.length !== expected.length) return false
+    const a = Buffer.from(got)
+    const b = Buffer.from(expected)
+    return timingSafeEqual(a, b)
+  } catch {
+    return false
+  }
+}
+
 // API route helper — returns a 403 NextResponse if the current user is not
 // admin, otherwise null. Usage at the top of a handler:
 //   const denied = await denyIfNotAdmin(); if (denied) return denied;
+// Allows bypass via X-Service-Token header matching PROVISION_SERVICE_TOKEN env.
 export async function denyIfNotAdmin() {
+  if (await isServiceTokenAuth()) return null
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   if (user.role !== "admin") {

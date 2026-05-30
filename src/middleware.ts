@@ -29,6 +29,16 @@ export function middleware(req: NextRequest) {
     return applySecurityHeaders(NextResponse.next())
   }
 
+  // Service token bypass for RDP worker (deploy_worker.py et al). Only valid for
+  // /api/* paths. Fails closed if PROVISION_SERVICE_TOKEN env is not set.
+  if (pathname.startsWith("/api/")) {
+    const svcToken = req.headers.get("x-service-token")
+    const expectedToken = process.env.PROVISION_SERVICE_TOKEN
+    if (svcToken && expectedToken && svcToken.length === expectedToken.length && svcToken === expectedToken) {
+      return applySecurityHeaders(NextResponse.next())
+    }
+  }
+
   const token = req.cookies.get("pbn_session")?.value
   if (!token) {
     if (pathname.startsWith("/api/")) {
