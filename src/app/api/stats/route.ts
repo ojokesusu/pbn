@@ -8,6 +8,7 @@ export async function GET() {
 
     const [
       totalDomains, totalArticles, recentDeploys, activeThemes, totalServers,
+      healthyServers,
       totalBacklinks, deployedDomains, aliveDomains, deadDomains,
       schedulerActive, schedulerRunning,
       todayArticles, todayDeploys,
@@ -26,6 +27,7 @@ export async function GET() {
       }),
       prisma.theme.count({ where: { domains: { some: {} } } }),
       prisma.server.count(),
+      prisma.server.count({ where: { status: "active", stack: { notIn: ["", "unmanaged"] } } }),
       prisma.backlink.count(),
       prisma.domain.count({ where: { lastDeployed: { not: null } } }),
       prisma.domain.count({ where: { isAlive: true } }),
@@ -57,6 +59,7 @@ export async function GET() {
       recentDeploys,
       activeThemes,
       totalServers,
+      healthyServers,
       totalBacklinks,
       deployedDomains,
       aliveDomains,
