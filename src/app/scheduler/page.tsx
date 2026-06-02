@@ -1,7 +1,8 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useState, useCallback } from "react"
-import { Clock, Play, Square, Loader2, RefreshCw, CheckCircle2, XCircle, Settings2, Globe, FileText, Zap } from "lucide-react"
+import { Clock, Play, Square, Loader2, RefreshCw, CheckCircle2, XCircle, Settings2, Globe, FileText, Zap, Newspaper, Sparkles, ArrowRight } from "lucide-react"
 
 import { SidebarInset } from "@/components/ui/sidebar"
 import { useConfirm } from "@/components/ui/confirm-modal"
@@ -9,6 +10,8 @@ import { AppHeader } from "@/components/layout/app-header"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
+
+type ContentMode = "pure_ai" | "hybrid_rss"
 
 interface SchedulerData {
   config: {
@@ -20,6 +23,8 @@ interface SchedulerData {
     autoPurgeCache: boolean
     initialArticles: number
     maxDomainsPerDay: number
+    contentMode: ContentMode
+    hybridSourceLimit: number
   }
   stats: {
     totalDomains: number
@@ -104,7 +109,7 @@ export default function SchedulerPage() {
     fetchData()
   }
 
-  async function updateConfig(field: string, value: number | boolean) {
+  async function updateConfig(field: string, value: number | boolean | string) {
     await fetch("/api/scheduler", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [field]: value }) })
     fetchData()
   }
@@ -272,6 +277,98 @@ export default function SchedulerPage() {
                 <input type="checkbox" checked={cfg?.autoPurgeCache ?? true} onChange={(e) => updateConfig("autoPurgeCache", e.target.checked)} className="rounded" />
                 <span className="text-sm" style={{ color: "var(--secondary-foreground)" }}>Auto purge cache</span>
               </label>
+            </div>
+
+            {/* ─── Content Mode ─── */}
+            <div className="mt-4 pt-4 border-t" style={{ borderColor: "var(--border)" }}>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <Label className="text-sm font-semibold flex items-center gap-2" style={{ color: "var(--foreground)" }}>
+                    <Sparkles className="size-4" style={{ color: "#a855f7" }} /> Content Mode
+                  </Label>
+                  <p className="text-[11px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+                    Sumber konten yang dipakai scheduler buat generate artikel
+                  </p>
+                </div>
+                <Link
+                  href="/content/niches"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5 hover:bg-[rgba(14,165,233,0.1)] transition-colors"
+                  style={{ color: "#0ea5e9", border: "1px solid rgba(14,165,233,0.3)" }}
+                >
+                  <Newspaper className="size-3.5" /> Configure Content Mapping <ArrowRight className="size-3" />
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label
+                  className="rounded-xl border p-3 cursor-pointer transition-all"
+                  style={{
+                    background: cfg?.contentMode === "pure_ai" ? "rgba(168,85,247,0.08)" : "var(--card)",
+                    borderColor: cfg?.contentMode === "pure_ai" ? "#a855f7" : "var(--border)",
+                  }}
+                >
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="radio"
+                      name="contentMode"
+                      value="pure_ai"
+                      checked={cfg?.contentMode === "pure_ai"}
+                      onChange={() => updateConfig("contentMode", "pure_ai")}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>Pure AI</p>
+                      <p className="text-[11px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+                        Generate dari nol via Claude AI. Token mahal, full kreatif.
+                      </p>
+                    </div>
+                  </div>
+                </label>
+
+                <label
+                  className="rounded-xl border p-3 cursor-pointer transition-all"
+                  style={{
+                    background: cfg?.contentMode === "hybrid_rss" ? "rgba(14,165,233,0.08)" : "var(--card)",
+                    borderColor: cfg?.contentMode === "hybrid_rss" ? "#0ea5e9" : "var(--border)",
+                  }}
+                >
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="radio"
+                      name="contentMode"
+                      value="hybrid_rss"
+                      checked={cfg?.contentMode === "hybrid_rss"}
+                      onChange={() => updateConfig("contentMode", "hybrid_rss")}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>Hybrid RSS</p>
+                      <p className="text-[11px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+                        Scrape RSS + Rewrite via Claude (lebih hemat, lebih natural).
+                      </p>
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              <div className="mt-3 flex items-center gap-3">
+                <Label className="text-xs whitespace-nowrap" style={{ color: cfg?.contentMode === "hybrid_rss" ? "var(--secondary-foreground)" : "var(--muted-foreground)" }}>
+                  Hybrid Source Limit
+                </Label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={cfg?.hybridSourceLimit ?? 3}
+                  disabled={cfg?.contentMode !== "hybrid_rss"}
+                  onChange={(e) => updateConfig("hybridSourceLimit", Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+                  className="w-20 rounded-md border px-2 py-1 text-sm tabular-nums disabled:opacity-50"
+                  style={{ background: "var(--card)", borderColor: "var(--border)", color: "var(--foreground)" }}
+                />
+                <span className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>
+                  Hybrid mode narik artikel Google News per niche domain, AI rewrite biar hindarin plagiarisme.
+                </span>
+              </div>
             </div>
           </div>
         )}

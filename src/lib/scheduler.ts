@@ -4,6 +4,7 @@
 
 import { prisma } from "./db";
 import { generateArticleWithClaude, generateBackdates } from "./anthropic";
+import type { ArticleSourceContext } from "./anthropic";
 import { deployDomain } from "./deploy";
 import { generateUniqueThemeForGenre } from "./theme-engine";
 import { findZoneByName } from "./cloudflare";
@@ -11,6 +12,7 @@ import { submitToIndexNow } from "./google-ping";
 import { distributeBacklinks } from "./backlink-distributor";
 import { notify, checkMilestones } from "./notifications";
 import { pollinationsFromGenre } from "./pollinations";
+import { fetchNews, fetchFromActiveSources, fetchArticleFull } from "./rss-scraper";
 
 const AUTHOR_NAMES = [
   "Rina Puspitasari", "Ahmad Fauzi", "Dewi Lestari", "Budi Santoso",
@@ -122,6 +124,117 @@ async function purgeCloudflareCache(domainUrl: string): Promise<boolean> {
   }
 }
 
+// ── Hybrid RSS+rewrite mode helper ──
+// Aggregates articles from operator-curated RssSource rows (active=true),
+// scores each by niche-keyword overlap, and picks the best match. If no
+// keyword hits anywhere, falls back to the most recent article. If zero
+// RssSource rows exist at all, fetches Google News directly via fetchNews.
+type DomainForHybrid = {
+  id: string;
+  genre: string | null;
+  nicheMapping?: {
+    keywords: string[];
+    language: string;
+    niche: string;
+  } | null;
+};
+
+// Build a generic Google News query string from a NicheMapping (used only
+// when RssSource table is empty so the hybrid flow still produces something).
+function buildQueryFromNiche(
+  mapping: DomainForHybrid["nicheMapping"],
+  genre: string | null,
+): string {
+  const keywords = mapping?.keywords?.filter(k => k && k.trim().length > 0) ?? [];
+  if (keywords.length > 0) {
+    return keywords[Math.floor(Math.random() * keywords.length)];
+  }
+  return (mapping?.niche || genre || "berita").trim();
+}
+
+export async function buildHybridContext(
+  domain: DomainForHybrid,
+  sourceLimit: number = 3,
+): Promise<ArticleSourceContext | null> {
+  try {
+    const mapping = domain.nicheMapping;
+    const language = mapping?.language || "id";
+    const region = language.toUpperCase();
+    const keywords = (mapping?.keywords ?? [])
+      .filter(k => k && k.trim().length > 0)
+      .map(k => k.toLowerCase());
+
+    // 1. Check whether ANY active RssSource exists (regardless of language).
+    //    Used to decide between curated-feed flow and Google News fallback.
+    const totalActive = await prisma.rssSource.count({ where: { active: true } });
+
+    let articles: Awaited<ReturnType<typeof fetchFromActiveSources>> = [];
+
+    if (totalActive === 0) {
+      // No curated sources configured at all → fall back to direct Google News.
+      const fallbackQuery = buildQueryFromNiche(mapping, domain.genre);
+      articles = await fetchNews(fallbackQuery, language, region, 20);
+    } else {
+      // Pull from curated sources matching the niche language. Note:
+      // fetchFromActiveSources itself falls back to Google News if no active
+      // source matches the given language/region.
+      articles = await fetchFromActiveSources(language, region, 20);
+    }
+
+    if (!articles || articles.length === 0) return null;
+
+    // 2. Score by keyword overlap in title + summary.
+    //    Articles with no keyword hits get score 0 → bucketed for recency fallback.
+    const usable = articles.filter(a => a.title && a.link);
+
+    const scored = usable.map(a => {
+      const haystack = `${a.title} ${a.summary || ""}`.toLowerCase();
+      const score = keywords.reduce(
+        (n, kw) => (haystack.includes(kw) ? n + 1 : n),
+        0,
+      );
+      const publishedAt = a.published ? Date.parse(a.published) : 0;
+      return { article: a, score, publishedAt };
+    });
+
+    // 3. Pick top by keyword score; if no article hits any keyword, pick most recent.
+    scored.sort((a, b) => b.score - a.score || b.publishedAt - a.publishedAt);
+
+    const anyKeywordHit = scored.length > 0 && scored[0].score > 0;
+    let chosen;
+    if (anyKeywordHit) {
+      // Keep among top sourceLimit-scored candidates, pick highest-scoring.
+      chosen = scored.slice(0, Math.max(1, sourceLimit))[0];
+    } else {
+      // No keyword match anywhere → most recent article wins.
+      const byRecent = [...scored].sort((a, b) => b.publishedAt - a.publishedAt);
+      chosen = byRecent[0];
+    }
+    if (!chosen) return null;
+
+    const top = chosen.article;
+
+    // Prefer full body; fall back to RSS summary
+    let body = "";
+    if (top.link) {
+      body = await fetchArticleFull(top.link);
+    }
+    if (!body || body.length < 200) {
+      body = top.summary || top.contentSnippet || "";
+    }
+    if (!body || body.length < 100) return null;
+
+    return {
+      title: top.title,
+      content: body,
+      url: top.link,
+    };
+  } catch (err) {
+    console.warn(`[scheduler] buildHybridContext failed:`, err);
+    return null;
+  }
+}
+
 // Get or create scheduler config (singleton)
 export async function getSchedulerConfig() {
   let config = await prisma.schedulerConfig.findFirst();
@@ -172,11 +285,16 @@ export async function initialDomainSetup(domainId: string, articleCount: number 
 }> {
   const domain = await prisma.domain.findUnique({
     where: { id: domainId },
-    include: { theme: true, _count: { select: { articles: true } } },
+    include: { theme: true, nicheMapping: true, _count: { select: { articles: true } } },
   });
   if (!domain) return { success: false, articlesCreated: 0, message: "Domain not found" };
 
   const genre = domain.genre || "Berita";
+
+  // Read scheduler config once — used to decide hybrid vs pure_ai per article
+  const cfg = await getSchedulerConfig();
+  const hybridMode = cfg.contentMode === "hybrid_rss";
+  const hybridLimit = cfg.hybridSourceLimit ?? 3;
 
   try {
     // 1. Generate theme if needed
@@ -219,7 +337,23 @@ export async function initialDomainSetup(domainId: string, articleCount: number 
 
     for (let i = 0; i < articleCount; i++) {
       try {
-        const article = await generateArticleWithClaude(genre, undefined, existingTitles);
+        // HYBRID mode: fetch a source article from Google News RSS to rewrite.
+        // PURE_AI (default): sourceContext stays undefined → existing prompt flow.
+        let sourceContext: ArticleSourceContext | undefined;
+        if (hybridMode) {
+          const ctx = await buildHybridContext(
+            { id: domain.id, genre: domain.genre, nicheMapping: domain.nicheMapping },
+            hybridLimit,
+          );
+          sourceContext = ctx ?? undefined;
+        }
+
+        const article = await generateArticleWithClaude(
+          genre,
+          undefined,
+          existingTitles,
+          sourceContext ? { sourceContext } : undefined,
+        );
         existingTitles.push(article.title);
         const slug = slugify(article.title) || `artikel-${Date.now()}-${i}`;
         const existing = await prisma.article.findUnique({
@@ -238,6 +372,8 @@ export async function initialDomainSetup(domainId: string, articleCount: number 
             excerpt: article.excerpt, tags: article.tags,
             authorName, featuredImage, status: "published",
             categoryId: catId, domainId, publishedAt: publishDates[i],
+            // Traceability: store source URL when generated via hybrid mode (empty for pure_ai)
+            aiSourceUrl: sourceContext?.url ?? "",
           },
         });
         created++;
@@ -261,7 +397,10 @@ export async function generateSingleArticle(domainId: string): Promise<{
 }> {
   const domain = await prisma.domain.findUnique({
     where: { id: domainId },
-    include: { articles: { select: { title: true }, orderBy: { createdAt: "desc" }, take: 15 } },
+    include: {
+      articles: { select: { title: true }, orderBy: { createdAt: "desc" }, take: 15 },
+      nicheMapping: true,
+    },
   });
   if (!domain) return { success: false, message: "Domain not found" };
 
@@ -269,7 +408,23 @@ export async function generateSingleArticle(domainId: string): Promise<{
   const existingTitles = domain.articles.map(a => a.title);
 
   try {
-    const article = await generateArticleWithClaude(genre, undefined, existingTitles);
+    // HYBRID mode: fetch RSS source for rewrite. PURE_AI (default): no source.
+    const cfg = await getSchedulerConfig();
+    let sourceContext: ArticleSourceContext | undefined;
+    if (cfg.contentMode === "hybrid_rss") {
+      const ctx = await buildHybridContext(
+        { id: domain.id, genre: domain.genre, nicheMapping: domain.nicheMapping },
+        cfg.hybridSourceLimit ?? 3,
+      );
+      sourceContext = ctx ?? undefined;
+    }
+
+    const article = await generateArticleWithClaude(
+      genre,
+      undefined,
+      existingTitles,
+      sourceContext ? { sourceContext } : undefined,
+    );
     const slug = slugify(article.title) || `artikel-${Date.now()}`;
 
     const existing = await prisma.article.findUnique({
@@ -291,6 +446,8 @@ export async function generateSingleArticle(domainId: string): Promise<{
         excerpt: article.excerpt, tags: article.tags,
         authorName, featuredImage, status: "published",
         categoryId: catId, domainId, publishedAt: new Date(),
+        // Traceability: source URL when via hybrid mode, empty for pure_ai
+        aiSourceUrl: sourceContext?.url ?? "",
       },
     });
 

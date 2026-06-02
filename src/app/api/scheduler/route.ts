@@ -49,6 +49,8 @@ export async function GET() {
         autoPurgeCache: config.autoPurgeCache,
         initialArticles: config.initialArticles,
         maxDomainsPerDay: config.maxDomainsPerDay,
+        contentMode: config.contentMode,
+        hybridSourceLimit: config.hybridSourceLimit,
       },
       stats: {
         totalDomains,
@@ -89,6 +91,11 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const config = await getSchedulerConfig();
 
+    // Validate contentMode if provided
+    if (body.contentMode !== undefined && body.contentMode !== "pure_ai" && body.contentMode !== "hybrid_rss") {
+      return NextResponse.json({ error: "Invalid contentMode (must be pure_ai or hybrid_rss)" }, { status: 400 });
+    }
+
     const updated = await prisma.schedulerConfig.update({
       where: { id: config.id },
       data: {
@@ -100,6 +107,8 @@ export async function PUT(request: NextRequest) {
         autoPurgeCache: body.autoPurgeCache ?? config.autoPurgeCache,
         initialArticles: body.initialArticles ?? config.initialArticles,
         maxDomainsPerDay: body.maxDomainsPerDay ?? config.maxDomainsPerDay,
+        contentMode: body.contentMode ?? config.contentMode,
+        hybridSourceLimit: body.hybridSourceLimit ?? config.hybridSourceLimit,
       },
     });
 

@@ -201,11 +201,24 @@ const CATEGORY_NAMES: Record<string, string[]> = {
   iGaming: ["iGaming", "Berita Gaming", "Esports", "Platform Review", "Industry News"],
 };
 
-// Generate a single article using Claude
+export interface ArticleSourceContext {
+  title: string;
+  content: string;
+  url: string;
+}
+
+export interface GenerateArticleOptions {
+  sourceContext?: ArticleSourceContext;
+}
+
+// Generate a single article using Claude.
+// Backward compatible: 3rd positional arg can still be `existingTitles` (pure_ai default flow).
+// New: optional 4th arg `options.sourceContext` triggers HYBRID rewrite mode.
 export async function generateArticleWithClaude(
   genre: string,
   topicHint?: string,
   existingTitles?: string[],
+  options?: GenerateArticleOptions,
 ): Promise<GeneratedArticle> {
   const topics = GENRE_TOPICS[genre] || GENRE_TOPICS["Berita"];
   const topic = topicHint || topics[Math.floor(Math.random() * topics.length)];
@@ -216,7 +229,40 @@ export async function generateArticleWithClaude(
     ? `\n\nJANGAN gunakan judul yang mirip dengan ini (sudah ada):\n${existingTitles.slice(-10).map(t => `- ${t}`).join("\n")}`
     : "";
 
-  const prompt = `Kamu adalah penulis blog Indonesia yang berpengalaman. Tulis artikel blog dalam Bahasa Indonesia tentang topik: "${topic}" untuk kategori "${genre}".
+  const src = options?.sourceContext;
+  // Trim source content to keep prompt budget sane (~6k chars ≈ 1.5k tokens)
+  const trimmedSource = src ? src.content.slice(0, 6000) : "";
+
+  const prompt = src
+    ? `Kamu adalah penulis blog Indonesia berpengalaman. Tulis ULANG artikel berikut menjadi artikel blog baru yang ORIGINAL dalam Bahasa Indonesia untuk kategori "${genre}".
+
+SUMBER (referensi konteks, JANGAN dikutip langsung):
+Judul: ${src.title}
+Isi: ${trimmedSource}
+
+ATURAN REWRITE:
+1. Parafrase TOTAL — JANGAN salin kalimat, frasa, atau struktur kalimat sumber
+2. Restrukturisasi alur: ubah urutan poin, gabung/pecah paragraf, tambahkan sudut pandang baru
+3. JANGAN menyebut sumber, outlet berita, atau tautan asli — artikel terasa orisinal
+4. JANGAN gunakan kutipan langsung ("...") dari sumber
+5. Target panjang: 800-1000 kata
+6. Bahasa Indonesia ALAMI, tidak kaku, sesekali santai ("kamu", "kita")
+7. JANGAN mulai dengan "Dalam era..." atau "Di era modern ini..."
+8. JANGAN gunakan frasa AI seperti "Penting untuk dicatat", "Perlu digarisbawahi"
+9. JANGAN pakai heading "Kesimpulan" di akhir
+10. Variasikan panjang paragraf, sisipkan opini personal yang autentik
+${existingTitlesHint}
+
+FORMAT OUTPUT (JSON):
+{
+  "title": "Judul baru yang menarik & SEO-friendly (50-70 karakter), BUKAN copy judul sumber",
+  "content": "Artikel HTML (<h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>, <blockquote>). 800-1000 kata. 3-4 H2 dan 1-2 H3.",
+  "excerpt": "Ringkasan 1-2 kalimat (maksimal 160 karakter)",
+  "tags": "tag1, tag2, tag3, tag4, tag5"
+}
+
+PENTING: Output HANYA JSON, tanpa markdown code block, tanpa backtick, tanpa penjelasan tambahan.`
+    : `Kamu adalah penulis blog Indonesia yang berpengalaman. Tulis artikel blog dalam Bahasa Indonesia tentang topik: "${topic}" untuk kategori "${genre}".
 
 ATURAN PENTING:
 1. Tulis dalam Bahasa Indonesia yang ALAMI dan TIDAK kaku — seperti blogger sungguhan, bukan robot
@@ -267,7 +313,7 @@ PENTING: Output HANYA JSON, tanpa markdown code block, tanpa backtick, tanpa pen
     const usage = data.usage || {};
     await recordApiUsage({
       model: "claude-haiku-4-5-20251001",
-      operation: "article-generate",
+      operation: src ? "article-rewrite" : "article-generate",
       inputTokens: usage.input_tokens || 0,
       outputTokens: usage.output_tokens || 0,
     });

@@ -26,6 +26,9 @@ import {
   Terminal,
   ListOrdered,
   Zap,
+  Newspaper,
+  Rss,
+  Tag,
 } from "lucide-react"
 import { useMe } from "@/hooks/use-me"
 import { AvatarDisplay } from "@/components/ui/avatar-display"
@@ -156,6 +159,29 @@ const MENU_GROUPS: NavGroup[] = [
         icon: Zap,
         tourId: "nav-stress-tests",
         adminOnly: true,
+      },
+    ],
+  },
+  {
+    label: "KONTEN",
+    items: [
+      {
+        title: "Content Pipeline",
+        href: "/content",
+        icon: Newspaper,
+        tourId: "nav-content",
+      },
+      {
+        title: "Niche Mapping",
+        href: "/content/niches",
+        icon: Tag,
+        tourId: "nav-content-niches",
+      },
+      {
+        title: "RSS Sources",
+        href: "/content/rss-sources",
+        icon: Rss,
+        tourId: "nav-content-rss",
       },
     ],
   },
