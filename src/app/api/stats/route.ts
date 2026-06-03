@@ -15,6 +15,7 @@ export async function GET() {
       indexedDomains,
       todayBacklinks, totalBacklinkPlacements, backlinkConfig,
       domainsWithoutSchedule,
+      adultDomains,
     ] = await Promise.all([
       prisma.domain.count(),
       prisma.article.count(),
@@ -51,6 +52,8 @@ export async function GET() {
           ],
         },
       }),
+      // Quarantined adult domains — drives the sidebar badge on /domains/adult.
+      prisma.domain.count({ where: { isAdult: true } }),
     ]);
 
     return NextResponse.json({
@@ -73,6 +76,7 @@ export async function GET() {
       totalBacklinkPlacements,
       backlinkDailyLimit: backlinkConfig?.maxPerDay ?? 15,
       domainsWithoutSchedule,
+      adultDomains,
     });
   } catch (error) {
     console.error("Failed to fetch stats:", error);

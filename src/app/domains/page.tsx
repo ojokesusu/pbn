@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Filter,
   X,
+  ShieldAlert,
 } from "lucide-react"
 
 import { SidebarInset } from "@/components/ui/sidebar"
@@ -117,6 +118,7 @@ interface DomainStats {
   berita: number
   schedulerActive: number
   schedulerInactive: number
+  adult: number
 }
 
 export default function DomainsPage() {
@@ -135,6 +137,7 @@ export default function DomainsPage() {
     total: 0, deployed: 0, alive: 0, dead: 0, withArticles: 0,
     wpOnly: 0, aiOnly: 0, mixed: 0,
     magazine: 0, blog: 0, berita: 0, schedulerActive: 0, schedulerInactive: 0,
+    adult: 0,
   })
   const [genres, setGenres] = useState<string[]>([])
   const perPage = 100
@@ -186,6 +189,9 @@ export default function DomainsPage() {
       if (contentFilter) params.set("content", contentFilter)
       if (templateFilter) params.set("template", templateFilter)
       if (schedulerFilter) params.set("scheduler", schedulerFilter)
+      // Legit pool only — adult-flagged domains live on /domains/adult so they
+      // don't pollute the deploy/scheduler workflows.
+      params.set("isAdult", "false")
       params.set("page", String(currentPage))
       params.set("perPage", String(perPage))
       const res = await fetch(`/api/domains?${params.toString()}`)
@@ -385,6 +391,19 @@ export default function DomainsPage() {
             <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
               Kelola domain jaringan blog privat Anda.
             </p>
+            {stats.adult > 0 && (
+              <Link
+                href="/domains/adult"
+                className="mt-1.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors hover:opacity-80"
+                style={{
+                  background: "rgba(239,68,68,0.12)",
+                  color: "#ef4444",
+                }}
+              >
+                <ShieldAlert className="size-3" />
+                {stats.adult} adult quarantined →
+              </Link>
+            )}
           </div>
           <div className="flex gap-2">
             <Button

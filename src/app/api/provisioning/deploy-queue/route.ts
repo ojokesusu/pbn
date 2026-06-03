@@ -52,7 +52,30 @@ async function hydrateItems(items: Array<{
   }));
 }
 
+// Archive any queued/paused items that point at an adult domain so they
+// never get picked up by the deploy worker. Returns the number archived.
+async function archiveAdultQueueItems(): Promise<number> {
+  const adultDomains = await prisma.domain.findMany({
+    where: { isAdult: true },
+    select: { id: true },
+  });
+  if (adultDomains.length === 0) return 0;
+  const adultIds = adultDomains.map((d) => d.id);
+  const result = await prisma.deployQueueItem.updateMany({
+    where: {
+      domainId: { in: adultIds },
+      status: { in: ["queued", "paused"] },
+    },
+    data: { status: "adult_quarantine", errorMessage: "Adult domain — auto-archived" },
+  });
+  return result.count;
+}
+
 async function buildResponse() {
+  // Sweep adult items into the quarantine bucket on every fetch so the UI
+  // never displays them under "queued" and the worker never picks them up.
+  await archiveAdultQueueItems();
+
   const queueRaw = await prisma.deployQueueItem.findMany({
     where: { status: { in: ["queued", "processing"] } },
     orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
@@ -146,16 +169,18 @@ export async function POST(request: Request) {
       const prio = typeof priority === "number" ? priority : 0;
 
       // Auto-propagate Domain.serverId when caller doesn't provide one.
+      // Also drop adult-flagged domains here so they never enter the queue.
       const domainRows = await prisma.domain.findMany({
-        where: { id: { in: domainIds } },
+        where: { id: { in: domainIds }, isAdult: false },
         select: { id: true, serverId: true },
       });
       const domainServerMap = new Map(
         domainRows.map((d) => [d.id, d.serverId])
       );
+      const allowedDomainIds = domainIds.filter((id) => domainServerMap.has(id));
 
       await Promise.all(
-        domainIds.map((domainId) => {
+        allowedDomainIds.map((domainId) => {
           const resolvedServerId =
             serverId ?? domainServerMap.get(domainId) ?? null;
           return prisma.deployQueueItem.upsert({
@@ -193,6 +218,8 @@ export async function POST(request: Request) {
     } else if (action === "schedule") {
       // Anti-spam pace planning: distribute queued unsched items over (count/12) days
       // starting tomorrow morning 9am. ~12 per day (10-15/day band).
+      // Quarantine any adult items first so the schedule slots stay clean.
+      await archiveAdultQueueItems();
       const PER_DAY = 12;
       const unscheduled = await prisma.deployQueueItem.findMany({
         where: { status: "queued", scheduledAt: null },

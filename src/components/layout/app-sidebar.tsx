@@ -29,6 +29,7 @@ import {
   Newspaper,
   Rss,
   Tag,
+  ShieldAlert,
 } from "lucide-react"
 import { useMe } from "@/hooks/use-me"
 import { AvatarDisplay } from "@/components/ui/avatar-display"
@@ -62,6 +63,7 @@ type SidebarStats = {
   todayBacklinks: number
   backlinkDailyLimit: number
   healthyServers?: number
+  adultDomains?: number
 }
 
 type BadgeTone = "teal" | "lime" | "red" | "amber" | "purple" | "pink" | "muted"
@@ -111,6 +113,16 @@ const MENU_GROUPS: NavGroup[] = [
         tourId: "nav-domain",
         badge: (s) => fmtCount(s?.totalDomains),
         badgeTone: () => "lime",
+      },
+      {
+        title: "Adult Domains",
+        href: "/domains/adult",
+        icon: ShieldAlert,
+        tourId: "nav-domain-adult",
+        // Badge only renders when there's at least one quarantined domain —
+        // the sidebar stays clean when the pool is clean.
+        badge: (s) => (s?.adultDomains && s.adultDomains > 0 ? fmtCount(s.adultDomains) : null),
+        badgeTone: () => "red",
       },
       {
         title: "Artikel",

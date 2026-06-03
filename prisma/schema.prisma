@@ -55,6 +55,8 @@ model Domain {
   lastChecked     DateTime?
   indexStatus     String   @default("unchecked")
   lastIndexCheck  DateTime?
+  isAdult         Boolean  @default(false)
+  adultDetectedAt DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

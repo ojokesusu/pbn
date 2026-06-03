@@ -15,6 +15,12 @@ export async function GET(request: NextRequest) {
     const content = searchParams.get("content") || "";      // "" | "has-articles" | "no-articles" | "wp-only" | "ai-only" | "mixed"
     const template = searchParams.get("template") || "";    // "" | "magazine" | "blog" | "berita" | "none"
     const scheduler = searchParams.get("scheduler") || "";  // "" | "active" | "inactive"
+    // Adult quarantine: ?isAdult=true returns only quarantined; ?isAdult=false
+    // (or unset on the /domains page) excludes them so the legit pool stays clean.
+    // Unset = no filter (default behavior for legacy callers that need all rows).
+    const isAdultParam = searchParams.get("isAdult");
+    const isAdultFilter: boolean | null =
+      isAdultParam === "true" ? true : isAdultParam === "false" ? false : null;
     // Pagination opt-in. Legacy callers (home, deploy, import, health-check…)
     // pass no ?page/?perPage and get the plain array shape they used to.
     const isPaginated = searchParams.has("page") || searchParams.has("perPage");
@@ -57,6 +63,7 @@ export async function GET(request: NextRequest) {
         { domainSchedule: { is: { isActive: false } } },
       ];
     }
+    if (isAdultFilter !== null) where.isAdult = isAdultFilter;
 
     // ---- Legacy path: no ?page param ----
     // Several places (home dashboard, deploy, import/wordpress, etc.) still
@@ -126,6 +133,7 @@ export async function GET(request: NextRequest) {
       statBlog,
       statBerita,
       statScheduler,
+      statAdult,
       perDomainTotalArticles,
       perDomainWpArticles,
     ] = await Promise.all([
@@ -141,6 +149,8 @@ export async function GET(request: NextRequest) {
           isAlive: true,
           lastChecked: true,
           lastDeployed: true,
+          isAdult: true,
+          adultDetectedAt: true,
           createdAt: true,
           updatedAt: true,
           theme: { select: { id: true, name: true, layoutName: true, isGenerated: true } },
@@ -165,6 +175,9 @@ export async function GET(request: NextRequest) {
       prisma.domain.count({ where: { theme: { is: { layoutName: "blog" } } } }),
       prisma.domain.count({ where: { theme: { is: { layoutName: "berita" } } } }),
       prisma.domain.count({ where: { domainSchedule: { is: { isActive: true } } } }),
+      // Adult quarantine count — drives the badge on /domains and the sidebar.
+      // Unfiltered like the other stats so it stays stable across views.
+      prisma.domain.count({ where: { isAdult: true } }),
       // Per-domain breakdowns we need to derive contentSource stats. These
       // run on the (~8k row) articles table, which is fast with a domainId
       // index — small enough to scan in tens of ms.
@@ -257,6 +270,7 @@ export async function GET(request: NextRequest) {
         berita: statBerita,
         schedulerActive: statScheduler,
         schedulerInactive: statTotal - statScheduler,
+        adult: statAdult,
       },
       genres: genres.map((g) => g.genre).filter(Boolean).sort(),
     });

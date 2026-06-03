@@ -35,6 +35,19 @@ export async function deployDomain(domainId: string): Promise<DeployResult> {
     };
   }
 
+  // Adult-quarantine guard: never push files to adult domains.
+  if ((domain as { isAdult?: boolean }).isAdult) {
+    return {
+      domainId,
+      url: domain.url,
+      status: "failed",
+      filesDeployed: 0,
+      message: "Skipped: adult domain quarantined",
+      error: "adult_quarantine",
+      durationMs: Date.now() - start,
+    };
+  }
+
   // Create deploy log entry
   const deployLog = await prisma.deployLog.create({
     data: {

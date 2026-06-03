@@ -288,6 +288,10 @@ export async function initialDomainSetup(domainId: string, articleCount: number 
     include: { theme: true, nicheMapping: true, _count: { select: { articles: true } } },
   });
   if (!domain) return { success: false, articlesCreated: 0, message: "Domain not found" };
+  // Adult-quarantine guard: never spend Claude tokens on adult domains.
+  if ((domain as { isAdult?: boolean }).isAdult) {
+    return { success: false, articlesCreated: 0, message: "Skipped: adult domain quarantined" };
+  }
 
   const genre = domain.genre || "Berita";
 
@@ -403,6 +407,10 @@ export async function generateSingleArticle(domainId: string): Promise<{
     },
   });
   if (!domain) return { success: false, message: "Domain not found" };
+  // Adult-quarantine guard: never spend Claude tokens on adult domains.
+  if ((domain as { isAdult?: boolean }).isAdult) {
+    return { success: false, message: "Skipped: adult domain quarantined" };
+  }
 
   const genre = domain.genre || "Berita";
   const existingTitles = domain.articles.map(a => a.title);
@@ -475,10 +483,12 @@ export async function processSchedulerTick(): Promise<{
   let processed = 0, generated = 0, deployed = 0, purged = 0, backlinksPlaced = 0;
 
   // Find domains that are due (nextScheduled <= now)
+  // Skip adult domains entirely — they should never reach the article-gen pipeline.
   const dueDomains = await prisma.domainSchedule.findMany({
     where: {
       isActive: true,
       nextScheduled: { lte: now },
+      domain: { isAdult: false },
     },
     include: {
       domain: { include: { server: true, _count: { select: { articles: true } } } },
@@ -637,6 +647,14 @@ export async function processSchedulerTick(): Promise<{
 export async function activateDomains(domainIds: string[], config?: { articlesPerWeek: number; timeStart: number; timeEnd: number }) {
   const cfg = config || { articlesPerWeek: 4, timeStart: 6, timeEnd: 23 };
   let activated = 0;
+
+  // Filter out adult-flagged domains up front so they never enter the schedule.
+  const safeDomains = await prisma.domain.findMany({
+    where: { id: { in: domainIds }, isAdult: false },
+    select: { id: true },
+  });
+  const allowed = new Set(safeDomains.map((d) => d.id));
+  domainIds = domainIds.filter((id) => allowed.has(id));
 
   for (const domainId of domainIds) {
     // Stagger initial schedule times so they don't all run at once

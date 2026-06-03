@@ -86,6 +86,58 @@ export async function PUT(
   }
 }
 
+// PATCH — partial update. Currently used for the adult-quarantine toggle from
+// /domains/adult ("Unflag" sets isAdult=false and clears adultDetectedAt).
+// Kept narrow on purpose: only allow-listed fields are accepted so this can't
+// be repurposed as a generic editor by mistake.
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+
+    const existing = await prisma.domain.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json({ error: "Domain not found" }, { status: 404 });
+    }
+
+    const data: Record<string, unknown> = {};
+    if (typeof body.isAdult === "boolean") {
+      data.isAdult = body.isAdult;
+      // When unflagging, also clear the detection timestamp so the audit trail
+      // shows the domain was deliberately re-admitted rather than never flagged.
+      data.adultDetectedAt = body.isAdult ? new Date() : null;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json(
+        { error: "No supported fields provided" },
+        { status: 400 }
+      );
+    }
+
+    const domain = await prisma.domain.update({
+      where: { id },
+      data,
+      include: {
+        theme: true,
+        server: { select: { id: true, label: true, name: true, host: true } },
+        _count: { select: { articles: true } },
+      },
+    });
+
+    return NextResponse.json(domain);
+  } catch (error) {
+    console.error("Failed to patch domain:", error);
+    return NextResponse.json(
+      { error: "Failed to patch domain" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

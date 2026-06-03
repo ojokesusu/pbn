@@ -111,11 +111,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { limit = 5, articlesPerDomain = 20, domainIds } = body;
 
-    // Find domains with no articles
+    // Find domains with no articles.
+    // Adult-flagged domains are excluded unconditionally — we never spend
+    // Claude tokens on them.
     let domains;
     if (domainIds && Array.isArray(domainIds) && domainIds.length > 0) {
       domains = await prisma.domain.findMany({
-        where: { id: { in: domainIds } },
+        where: { id: { in: domainIds }, isAdult: false },
         include: { server: { select: { id: true } }, theme: true, _count: { select: { articles: true } } },
       });
     } else {
@@ -123,6 +125,7 @@ export async function POST(request: NextRequest) {
         where: {
           server: { isNot: null },
           articles: { none: {} }, // no articles at all
+          isAdult: false,
         },
         include: { server: { select: { id: true } }, theme: true, _count: { select: { articles: true } } },
         take: limit,

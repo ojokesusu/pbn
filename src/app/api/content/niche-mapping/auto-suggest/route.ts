@@ -37,13 +37,24 @@ export async function POST(request: NextRequest) {
     // Resolve target domains. When `all=true` we pull every Domain row,
     // optionally filtering out the ones with an existing NicheMapping so
     // a bulk run is idempotent against Sandi's earlier manual work.
-    const where: Record<string, unknown> = {};
+    // Adult-flagged domains are skipped unconditionally — we never want
+    // a niche/RSS pairing for them.
+    const where: Record<string, unknown> = { isAdult: false };
     if (!wantAll) {
       where.id = { in: requestedIds };
     }
     if (onlyMissing) {
       where.nicheMapping = { is: null };
     }
+
+    // Garbage-collect any pre-existing NicheMapping rows that point at an
+    // adult domain. detect-adult-domains.ts flags new rows after they may
+    // have already been auto-classified, so this is a routine clean-up
+    // and is reported back to the caller.
+    const adultPurge = await prisma.nicheMapping.deleteMany({
+      where: { domain: { isAdult: true } },
+    });
+    const nicheMappingsRemoved = adultPurge.count;
 
     const domains = await prisma.domain.findMany({
       where,
@@ -106,6 +117,7 @@ export async function POST(request: NextRequest) {
       by_niche: byNiche,
       low_confidence_count: lowConfidenceCount,
       skipped: domains.length - processed - failures.length,
+      adult_mappings_removed: nicheMappingsRemoved,
       failures: failures.slice(0, 25), // cap noise in the response
       failure_count: failures.length,
     });
