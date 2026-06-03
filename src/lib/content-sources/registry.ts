@@ -4,10 +4,18 @@
 // rss_generic so a misconfigured row never crashes the scheduler.
 
 import { rssGenericAdapter } from "./adapters/rss-generic";
+import { coinGeckoAdapter } from "./adapters/coingecko";
+import { bmkgAdapter } from "./adapters/bmkg";
+import { apiFootballAdapter } from "./adapters/api-football";
+import { tmdbAdapter } from "./adapters/tmdb";
 import type { ContentAdapter } from "./types";
 
 const REGISTRY: Record<string, ContentAdapter> = {
   [rssGenericAdapter.key]: rssGenericAdapter,
+  [coinGeckoAdapter.key]: coinGeckoAdapter,
+  [bmkgAdapter.key]: bmkgAdapter,
+  [apiFootballAdapter.key]: apiFootballAdapter,
+  [tmdbAdapter.key]: tmdbAdapter,
 };
 
 export function getAdapter(key: string): ContentAdapter {
