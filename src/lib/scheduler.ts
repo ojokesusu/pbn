@@ -13,6 +13,7 @@ import { distributeBacklinks } from "./backlink-distributor";
 import { notify, checkMilestones } from "./notifications";
 import { pollinationsFromGenre } from "./pollinations";
 import { fetchNews, fetchFromActiveSources, fetchArticleFull } from "./rss-scraper";
+import { fetchFromActiveContentSources } from "./content-sources";
 
 const AUTHOR_NAMES = [
   "Rina Puspitasari", "Ahmad Fauzi", "Dewi Lestari", "Budi Santoso",
@@ -160,25 +161,59 @@ export async function buildHybridContext(
     const mapping = domain.nicheMapping;
     const language = mapping?.language || "id";
     const region = language.toUpperCase();
+    const niche = (mapping?.niche || "").trim();
     const keywords = (mapping?.keywords ?? [])
       .filter(k => k && k.trim().length > 0)
       .map(k => k.toLowerCase());
 
-    // 1. Check whether ANY active RssSource exists (regardless of language).
-    //    Used to decide between curated-feed flow and Google News fallback.
-    const totalActive = await prisma.rssSource.count({ where: { active: true } });
-
+    // 1. Niche-first dispatch via the ContentSource registry. Pull only from
+    //    sources tagged with this domain's niche so politik domains never see
+    //    food feeds. Falls through two layers:
+    //      a) niche-specific active sources
+    //      b) any active source for the language/region
+    //      c) raw Google News query as last resort
     let articles: Awaited<ReturnType<typeof fetchFromActiveSources>> = [];
 
-    if (totalActive === 0) {
-      // No curated sources configured at all → fall back to direct Google News.
+    if (niche) {
+      const { items } = await fetchFromActiveContentSources({
+        niche,
+        language,
+        region,
+        limit: 20,
+      });
+      articles = items.map(it => ({
+        title: it.title,
+        link: it.url,
+        summary: it.summary,
+        contentSnippet: it.summary,
+        published: it.publishedAt,
+        source: it.source,
+      }));
+    }
+
+    if (articles.length === 0) {
+      // Niche-specific bucket empty (or no niche on this domain) → wider net.
+      const { items } = await fetchFromActiveContentSources({
+        language,
+        region,
+        limit: 20,
+      });
+      if (items.length > 0) {
+        articles = items.map(it => ({
+          title: it.title,
+          link: it.url,
+          summary: it.summary,
+          contentSnippet: it.summary,
+          published: it.publishedAt,
+          source: it.source,
+        }));
+      }
+    }
+
+    if (articles.length === 0) {
+      // Even the wider net is empty → fall back to direct Google News.
       const fallbackQuery = buildQueryFromNiche(mapping, domain.genre);
       articles = await fetchNews(fallbackQuery, language, region, 20);
-    } else {
-      // Pull from curated sources matching the niche language. Note:
-      // fetchFromActiveSources itself falls back to Google News if no active
-      // source matches the given language/region.
-      articles = await fetchFromActiveSources(language, region, 20);
     }
 
     if (!articles || articles.length === 0) return null;

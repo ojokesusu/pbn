@@ -516,16 +516,28 @@ model NicheMapping {
   @@schema("pbn")
 }
 
+// RssSource is now a generic ContentSource conceptually — extended with
+// type/adapter/config columns to support non-RSS sources (api_football, tmdb,
+// coingecko, bmkg, cheerio_generic). Existing rows default to
+// type='rss' / adapter='rss_generic'. Model name kept as RssSource to avoid
+// renaming 8 downstream call sites; the dispatch layer treats `type` as the
+// real source-of-truth.
 model RssSource {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   name            String
-  url             String   @unique
-  niche           String   @default("")
-  language        String   @default("id")
-  region          String   @default("ID")
-  active          Boolean  @default(true)
+  url             String    @unique
+  niche           String    @default("")
+  language        String    @default("id")
+  region          String    @default("ID")
+  active          Boolean   @default(true)
   lastFetched     DateTime?
-  createdAt       DateTime @default(now())
+  type            String    @default("rss")
+  adapter         String    @default("rss_generic")
+  config          Json?
+  lastError       String?
+  errorCount      Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
 
   @@schema("pbn")
 }
