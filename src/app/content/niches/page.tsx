@@ -53,7 +53,7 @@ export default function NicheMappingPage() {
     async function load() {
       try {
         setLoading(true);
-        const res = await fetch("/api/content/niche-mapping");
+        const res = await fetch("/api/content/niche-mapping?pageSize=2000");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!cancelled) {
