@@ -8,6 +8,13 @@ import { coinGeckoAdapter } from "./adapters/coingecko";
 import { bmkgAdapter } from "./adapters/bmkg";
 import { apiFootballAdapter } from "./adapters/api-football";
 import { tmdbAdapter } from "./adapters/tmdb";
+import { cheerioGenericAdapter } from "./adapters/cheerio-generic";
+import { scraperEsportskuAdapter } from "./adapters/scraper-esportsku";
+import { scraperRumahAdapter } from "./adapters/scraper-rumah";
+import { scraperJobsdbAdapter } from "./adapters/scraper-jobsdb";
+import { scraperGlintsAdapter } from "./adapters/scraper-glints";
+import { scraperMommiesAdapter } from "./adapters/scraper-mommies";
+import { scraperFemaleDailyAdapter } from "./adapters/scraper-female-daily";
 import type { ContentAdapter } from "./types";
 
 const REGISTRY: Record<string, ContentAdapter> = {
@@ -16,6 +23,13 @@ const REGISTRY: Record<string, ContentAdapter> = {
   [bmkgAdapter.key]: bmkgAdapter,
   [apiFootballAdapter.key]: apiFootballAdapter,
   [tmdbAdapter.key]: tmdbAdapter,
+  [cheerioGenericAdapter.key]: cheerioGenericAdapter,
+  [scraperEsportskuAdapter.key]: scraperEsportskuAdapter,
+  [scraperRumahAdapter.key]: scraperRumahAdapter,
+  [scraperJobsdbAdapter.key]: scraperJobsdbAdapter,
+  [scraperGlintsAdapter.key]: scraperGlintsAdapter,
+  [scraperMommiesAdapter.key]: scraperMommiesAdapter,
+  [scraperFemaleDailyAdapter.key]: scraperFemaleDailyAdapter,
 };
 
 export function getAdapter(key: string): ContentAdapter {

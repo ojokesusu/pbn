@@ -32,67 +32,228 @@ type NicheRule = {
   keywords: string[];
 };
 
+// Order matters: more specific niches MUST come before more general ones.
+// e.g. 'kriminal' before 'news', 'bola' before 'sport', 'film' before 'hiburan'.
 const RULES: NicheRule[] = [
+  // ---------- NEWS CLUSTER (specific → general) ----------
+  {
+    niche: "politik",
+    strong: /\b(politik|pilpres|pilkada|partai|dpr|kabinet|presiden|gubernur|menteri)\b/i,
+    weak: /(politik|pilpres|pilkada|partai|kabinet|presiden|gubernur|menteri|politics)/i,
+    keywords: ["politik", "pilpres", "pilkada", "partai", "dpr", "presiden", "menteri"],
+  },
+  {
+    niche: "kriminal",
+    strong: /\b(kriminal|kepolisian|narkoba|pembunuhan|perampokan|pencurian|kriminalitas)\b/i,
+    weak: /(kriminal|polisi|narkoba|pembunuhan|perampokan|pencurian|kasus|crime)/i,
+    keywords: ["kriminal", "kepolisian", "narkoba", "kasus", "pencurian", "crime"],
+  },
+  {
+    niche: "hukum",
+    strong: /\b(hukum|pengadilan|putusan|vonis|jaksa|hakim|ruu|mahkamah)\b/i,
+    weak: /(hukum|pengadilan|putusan|vonis|jaksa|hakim|mahkamah|legal|law)/i,
+    keywords: ["hukum", "pengadilan", "vonis", "jaksa", "hakim", "mahkamah", "law"],
+  },
+  {
+    niche: "ekonomi",
+    strong: /\b(ekonomi|makroekonomi|inflasi|rupiah|apbn|bursa|makro)\b/i,
+    weak: /(ekonomi|inflasi|rupiah|apbn|bursa|makro|economy|economic)/i,
+    keywords: ["ekonomi", "inflasi", "rupiah", "apbn", "bursa", "makro", "economy"],
+  },
+  {
+    niche: "internasional",
+    strong: /\b(internasional|international|pbb|asean|washington|beijing|world|global)\b/i,
+    weak: /(internasional|international|pbb|asean|washington|beijing|world|global|luarnegeri)/i,
+    keywords: ["internasional", "international", "world", "pbb", "asean", "global"],
+  },
+  {
+    niche: "bencana",
+    strong: /\b(gempa|banjir|kebakaran|tsunami|longsor|bencana|bmkg)\b/i,
+    weak: /(gempa|banjir|kebakaran|tsunami|longsor|bencana|bmkg|disaster)/i,
+    keywords: ["bencana", "gempa", "banjir", "tsunami", "bmkg", "kebakaran"],
+  },
+  {
+    niche: "news",
+    strong: /\b(news|berita|kabar|peristiwa|viral|nasional)\b/i,
+    weak: /(news|berita|kabar|peristiwa|viral|nasional|info|harian)/i,
+    keywords: ["news", "berita", "peristiwa", "kabar", "info", "umum"],
+  },
+
+  // ---------- HIBURAN CLUSTER (specific → general) ----------
+  {
+    niche: "musik",
+    strong: /\b(musik|music|lagu|konser|album|billboard|spotify)\b/i,
+    weak: /(musik|music|lagu|konser|album|billboard|spotify|musisi|band)/i,
+    keywords: ["musik", "music", "lagu", "konser", "album", "spotify"],
+  },
+  {
+    niche: "film",
+    strong: /\b(film|movie|bioskop|cinema|sutradara|premiere)\b/i,
+    weak: /(film|movie|bioskop|cinema|sutradara|premiere|sinema)/i,
+    keywords: ["film", "movie", "bioskop", "cinema", "sutradara", "premiere"],
+  },
+  {
+    niche: "gaming",
+    strong: /\b(gaming|game|esports|mobilelegend|pubg|freefire|dota|valorant)\b/i,
+    weak: /(gaming|game|esports|mobilelegend|pubg|freefire|dota|valorant|gamer)/i,
+    keywords: ["gaming", "game", "esports", "mobile legend", "pubg", "dota"],
+  },
+  {
+    niche: "tv",
+    strong: /\b(sinetron|drakor|serial|episode|anime|drama)\b/i,
+    weak: /(sinetron|drakor|serial|episode|anime|drama|korea|netflix)/i,
+    keywords: ["sinetron", "drakor", "serial", "anime", "drama korea", "episode"],
+  },
+  {
+    niche: "hiburan",
+    strong: /\b(hiburan|selebriti|gosip|infotainment|artis|seleb|celebrity)\b/i,
+    weak: /(hiburan|selebriti|gosip|infotainment|artis|seleb|celebrity|entertainment)/i,
+    keywords: ["hiburan", "selebriti", "gosip", "artis", "infotainment", "entertainment"],
+  },
+
+  // ---------- OTOMOTIF / SPORT CLUSTER (specific → general) ----------
+  {
+    niche: "balap",
+    strong: /\b(motogp|formula1|f1|balap|racing|rossi|marquez|valentino)\b/i,
+    weak: /(motogp|formula1|balap|racing|rossi|marquez|valentino|race)/i,
+    keywords: ["motogp", "f1", "balap", "racing", "marquez", "rossi"],
+  },
+  {
+    niche: "otomotif",
+    strong: /\b(mobil|motor|otomotif|automotive|modifikasi)\b/i,
+    weak: /(mobil|motor|otomotif|automotive|modifikasi|kendaraan|auto)/i,
+    keywords: ["mobil", "motor", "otomotif", "automotive", "modifikasi", "review mobil"],
+  },
+  {
+    niche: "bola",
+    strong: /\b(bola|sepakbola|liga1|persija|persib|timnas|epl|liverpool|mu)\b/i,
+    weak: /(bola|sepakbola|liga1|persija|persib|timnas|epl|liverpool|football|soccer)/i,
+    keywords: ["bola", "sepakbola", "liga 1", "timnas", "epl", "liverpool"],
+  },
+  {
+    niche: "sport",
+    strong: /\b(sport|olahraga|atletik|badminton|tinju|fitness)\b/i,
+    weak: /(sport|olahraga|atletik|badminton|tinju|fitness|kebugaran)/i,
+    keywords: ["olahraga", "sport", "atletik", "badminton", "tinju", "fitness"],
+  },
+
+  // ---------- LIFE / SOCIETY (specific) ----------
+  {
+    niche: "properti",
+    strong: /\b(properti|property|rumah|kpr|apartemen|kontrakan)\b/i,
+    weak: /(properti|property|rumah|kpr|apartemen|kontrakan|realestate|estate)/i,
+    keywords: ["properti", "real estate", "rumah", "kpr", "apartemen", "kontrakan"],
+  },
+  {
+    niche: "karir",
+    strong: /\b(karir|karier|lowongan|kerja|gaji|interview|cv|hrd)\b/i,
+    weak: /(karir|karier|lowongan|kerja|gaji|interview|hrd|career|job)/i,
+    keywords: ["karir", "lowongan", "kerja", "gaji", "interview", "cv", "hrd"],
+  },
+  {
+    niche: "parenting",
+    strong: /\b(parenting|anak|ibu|ayah|hamil|mpasi|tumbuhkembang)\b/i,
+    weak: /(parenting|anak|ibu|ayah|hamil|mpasi|tumbuhkembang|balita|bayi)/i,
+    keywords: ["parenting", "anak", "ibu", "hamil", "mpasi", "tumbuh kembang"],
+  },
+  {
+    niche: "fashion",
+    strong: /\b(fashion|outfit|mode|busana|hijab)\b/i,
+    weak: /(fashion|outfit|mode|busana|hijab|trend|style)/i,
+    keywords: ["fashion", "outfit", "busana", "hijab", "mode", "trend"],
+  },
+  {
+    niche: "beauty",
+    strong: /\b(beauty|skincare|makeup|kosmetik|kecantikan|parfum)\b/i,
+    weak: /(beauty|skincare|makeup|kosmetik|kecantikan|parfum|cosmetic)/i,
+    keywords: ["beauty", "skincare", "makeup", "kosmetik", "kecantikan", "parfum"],
+  },
+  {
+    niche: "religion",
+    strong: /\b(islam|ramadan|doa|dakwah|ustadz|masjid|quran|kajian)\b/i,
+    weak: /(islam|ramadan|doa|dakwah|ustadz|masjid|quran|kajian|religi|muslim)/i,
+    keywords: ["islam", "ramadan", "doa", "dakwah", "masjid", "qur'an", "kajian"],
+  },
+  {
+    niche: "science",
+    strong: /\b(science|sains|riset|penelitian|ilmiah|fisika|kimia)\b/i,
+    weak: /(science|sains|riset|penelitian|ilmiah|fisika|kimia|biologi|scientific)/i,
+    keywords: ["science", "sains", "riset", "penelitian", "ilmiah", "fisika", "kimia"],
+  },
+  {
+    niche: "agrikultur",
+    strong: /\b(pertanian|agrikultur|petani|padi|sawit|kebun|peternakan|agriculture)\b/i,
+    weak: /(pertanian|agrikultur|petani|padi|sawit|kebun|peternakan|agriculture|tani)/i,
+    keywords: ["pertanian", "agrikultur", "petani", "padi", "sawit", "peternakan"],
+  },
+  {
+    niche: "militer",
+    strong: /\b(tni|militer|kopassus|marinir|alutsista|jenderal|military)\b/i,
+    weak: /(tni|militer|kopassus|marinir|alutsista|jenderal|military|tentara)/i,
+    keywords: ["tni", "militer", "kopassus", "marinir", "alutsista", "jenderal"],
+  },
+
+  // ---------- GENERIC EVERGREEN (broad — must stay near the bottom) ----------
+  {
+    niche: "tech",
+    strong: /\b(tech|teknologi|gadget|app|software|coding|developer)\b/i,
+    weak: /(tech|teknologi|gadget|software|coding|developer|digital|programming)/i,
+    keywords: ["tech", "teknologi", "gadget", "software", "coding", "developer"],
+  },
   {
     niche: "finance",
-    strong: /\b(finance|invest|saham|crypto|kripto|bank|loan|kredit)\b/i,
-    weak: /(finance|invest|saham|crypto|kripto|bank|loan|kredit|fintech|forex|trading)/i,
-    keywords: ["finance", "investasi", "saham", "crypto", "kredit", "fintech"],
+    // 'bank' moved to weak-only: too generic as a strong word-boundary token
+    // (would catch "skybank.id", "banking-app.com" as finance even though
+    // they're not). Strong keeps only unambiguous finance vocab.
+    strong: /\b(finance|invest|saham|crypto|kripto|kredit|fintech|forex)\b/i,
+    weak: /(finance|invest|saham|crypto|kripto|bank|kredit|fintech|forex|trading|loan)/i,
+    keywords: ["finance", "investasi", "saham", "crypto", "kredit", "fintech", "forex"],
   },
   {
     niche: "health",
-    strong: /\b(health|kesehatan|diet|fitness|medi|dokter|obat)\b/i,
+    strong: /\b(health|kesehatan|diet|fitness|medi|dokter|obat|klinik)\b/i,
     weak: /(health|kesehatan|diet|fitness|medi|dokter|obat|klinik|herbal|farma)/i,
-    keywords: ["kesehatan", "diet", "fitness", "medis", "dokter", "obat"],
-  },
-  {
-    niche: "tech",
-    strong: /\b(tech|teknologi|gadget|app|software|coding|programming)\b/i,
-    weak: /(tech|teknologi|gadget|software|coding|programming|developer|digital)/i,
-    keywords: ["teknologi", "gadget", "software", "coding", "developer", "digital"],
+    keywords: ["health", "kesehatan", "diet", "dokter", "obat", "klinik"],
   },
   {
     niche: "business",
-    strong: /\b(biz|business|usaha|startup|umkm|marketing)\b/i,
-    weak: /(business|usaha|startup|umkm|marketing|bisnis|wirausaha)/i,
-    keywords: ["bisnis", "usaha", "startup", "umkm", "marketing", "wirausaha"],
+    strong: /\b(business|biz|usaha|startup|umkm|marketing|wirausaha)\b/i,
+    weak: /(business|usaha|startup|umkm|marketing|wirausaha|bisnis)/i,
+    keywords: ["business", "usaha", "startup", "umkm", "marketing", "wirausaha"],
   },
   {
     niche: "education",
-    strong: /\b(edu|education|sekolah|kampus|kuliah|belajar)\b/i,
+    strong: /\b(education|edu|sekolah|kampus|kuliah|belajar|pendidikan)\b/i,
     weak: /(education|sekolah|kampus|kuliah|belajar|pendidikan|akademi|skripsi)/i,
-    keywords: ["pendidikan", "sekolah", "kampus", "kuliah", "belajar", "akademi"],
+    keywords: ["education", "pendidikan", "sekolah", "kampus", "kuliah", "belajar"],
   },
   {
     niche: "travel",
-    strong: /\b(travel|wisata|tour|hotel|destinasi)\b/i,
-    weak: /(travel|wisata|tour|hotel|destinasi|liburan|holiday)/i,
+    strong: /\b(travel|wisata|tour|hotel|destinasi|liburan)\b/i,
+    weak: /(travel|wisata|tour|hotel|destinasi|liburan|holiday|trip)/i,
     keywords: ["travel", "wisata", "tour", "hotel", "destinasi", "liburan"],
   },
   {
     niche: "food",
-    strong: /\b(food|kuliner|recipe|resep|masak)\b/i,
-    weak: /(food|kuliner|recipe|resep|masak|kafe|restoran)/i,
-    keywords: ["kuliner", "resep", "masakan", "food", "kafe", "restoran"],
+    strong: /\b(food|kuliner|recipe|resep|masak|restoran)\b/i,
+    weak: /(food|kuliner|recipe|resep|masak|restoran|kafe|cafe)/i,
+    keywords: ["food", "kuliner", "resep", "masak", "restoran", "kafe"],
   },
   {
-    niche: "sport",
-    // `fitness` shows up here too on purpose — health takes it first because
-    // it's earlier in the list, but if a URL has "bola" or "sport" we'd
-    // never reach this anyway. Kept for symmetry with the spec.
-    strong: /\b(sport|olahraga|bola|fitness)\b/i,
-    weak: /(sport|olahraga|bola|fitness|sepakbola|atletik)/i,
-    keywords: ["olahraga", "sport", "sepakbola", "atletik", "fitness", "kebugaran"],
+    niche: "lifestyle",
+    strong: /\b(lifestyle|gayahidup|tips|hobi)\b/i,
+    weak: /(lifestyle|gayahidup|tips|hobi|gaya hidup)/i,
+    keywords: ["lifestyle", "gaya hidup", "tips", "hobi"],
   },
 ];
 
-// Generic "lifestyle" bucket — broad enough that bulk content gen still has
-// something to hang a prompt on, but flagged as low confidence so the
-// dashboard can surface "review me" affordances later.
+// Fallback flipped from 'lifestyle' → 'news'. News (politik/nasional/peristiwa
+// umum) is the Indonesian default bucket — most unclassified PBN domains end
+// up parking on general berita content anyway, so the prompts compose better.
 const FALLBACK: NicheSuggestion = {
-  niche: "lifestyle",
+  niche: "news",
   confidence: "low",
-  keywords: ["lifestyle", "gaya hidup", "tips", "info", "berita", "umum"],
+  keywords: ["news", "berita", "peristiwa", "kabar", "info", "umum"],
 };
 
 // Strip protocol / path / TLD so the matcher sees just the brand-ish slug.
@@ -147,14 +308,38 @@ export function detectNicheVerbose(domain: NicheInput): NicheSuggestion | null {
 }
 
 export const NICHE_LIST = [
+  "politik",
+  "kriminal",
+  "hukum",
+  "ekonomi",
+  "internasional",
+  "bencana",
+  "news",
+  "hiburan",
+  "musik",
+  "film",
+  "gaming",
+  "tv",
+  "otomotif",
+  "balap",
+  "bola",
+  "sport",
+  "properti",
+  "karir",
+  "parenting",
+  "fashion",
+  "beauty",
+  "religion",
+  "science",
+  "agrikultur",
+  "militer",
+  "tech",
   "finance",
   "health",
-  "tech",
   "business",
   "education",
   "travel",
   "food",
-  "sport",
   "lifestyle",
 ] as const;
 export type Niche = (typeof NICHE_LIST)[number];

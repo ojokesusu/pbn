@@ -190,7 +190,7 @@ const MENU_GROUPS: NavGroup[] = [
         tourId: "nav-content-niches",
       },
       {
-        title: "RSS Sources",
+        title: "Sumber Konten",
         href: "/content/rss-sources",
         icon: Rss,
         tourId: "nav-content-rss",

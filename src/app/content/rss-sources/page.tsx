@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -22,6 +23,7 @@ type RssSource = {
   id: string;
   url: string;
   niche: string;
+  type: string;
   active: boolean;
   lastFetchedAt: string | null;
   lastError: string | null;
@@ -29,11 +31,54 @@ type RssSource = {
   createdAt: string | null;
 };
 
+type TypeFilter = "Semua" | "RSS" | "API" | "Scraper";
+
+function TypeBadge({ type }: { type: string }) {
+  const t = (type || "").toLowerCase();
+  if (t === "rss") {
+    return (
+      <Badge
+        variant="outline"
+        className="bg-blue-500/10 text-blue-600 border-blue-300"
+      >
+        RSS
+      </Badge>
+    );
+  }
+  if (t === "api") {
+    return (
+      <Badge
+        variant="outline"
+        className="bg-amber-500/10 text-amber-600 border-amber-300"
+      >
+        API
+      </Badge>
+    );
+  }
+  if (t === "scraper") {
+    return (
+      <Badge
+        variant="outline"
+        className="bg-purple-500/10 text-purple-600 border-purple-300"
+      >
+        Scraper
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="bg-muted text-muted-foreground">
+      {type || "-"}
+    </Badge>
+  );
+}
+
 export default function RssSourcesPage() {
   const [items, setItems] = useState<RssSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("Semua");
+  const [search, setSearch] = useState("");
 
   // Add form state
   const [newUrl, setNewUrl] = useState("");
@@ -53,6 +98,7 @@ export default function RssSourcesPage() {
         id: String(r.id ?? ""),
         url: String(r.url ?? ""),
         niche: typeof r.niche === "string" ? r.niche : "",
+        type: typeof r.type === "string" ? r.type : "rss",
         active: typeof r.active === "boolean" ? r.active : true,
         lastFetchedAt:
           typeof r.lastFetched === "string"
@@ -153,10 +199,10 @@ export default function RssSourcesPage() {
 
   return (
     <SidebarInset>
-      <AppHeader title="RSS Sources" />
+      <AppHeader title="Sumber Konten" />
       <div className="flex-1 space-y-6 p-6 md:p-8 overflow-y-auto">
         <div>
-          <h2 className="text-lg font-semibold">RSS Sources</h2>
+          <h2 className="text-lg font-semibold">Sumber Konten</h2>
           <p className="text-xs text-muted-foreground">
             Kelola feed RSS yang jadi sumber artikel sebelum AI rewrite.
           </p>
@@ -209,10 +255,52 @@ export default function RssSourcesPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <RssIcon className="size-4" /> {items.length} sources
+              <RssIcon className="size-4" />
+              {(() => {
+                const typed =
+                  typeFilter === "Semua"
+                    ? items
+                    : items.filter(
+                        (x) => x.type === typeFilter.toLowerCase(),
+                      );
+                const q = search.trim().toLowerCase();
+                const visible = q
+                  ? typed.filter(
+                      (x) =>
+                        x.url.toLowerCase().includes(q) ||
+                        x.niche.toLowerCase().includes(q),
+                    )
+                  : typed;
+                return (
+                  <span>
+                    {visible.length} of {typed.length} sources
+                  </span>
+                );
+              })()}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            {/* Tab filter + search */}
+            <div className="flex flex-wrap items-center gap-3">
+              <Tabs
+                value={typeFilter}
+                onValueChange={(v) => setTypeFilter(v as TypeFilter)}
+              >
+                <TabsList>
+                  <TabsTrigger value="Semua">Semua</TabsTrigger>
+                  <TabsTrigger value="RSS">RSS</TabsTrigger>
+                  <TabsTrigger value="API">API</TabsTrigger>
+                  <TabsTrigger value="Scraper">Scraper</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <Input
+                placeholder="Cari URL / niche..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="max-w-xs"
+              />
+            </div>
+
             {loading && items.length === 0 ? (
               <p className="text-sm text-muted-foreground py-6 text-center">
                 Loading...
@@ -228,6 +316,7 @@ export default function RssSourcesPage() {
                     <TableRow>
                       <TableHead>URL</TableHead>
                       <TableHead>Niche</TableHead>
+                      <TableHead>Type</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Items</TableHead>
                       <TableHead>Last Fetched</TableHead>
@@ -235,7 +324,21 @@ export default function RssSourcesPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {items.map((it) => (
+                    {items
+                      .filter((it) =>
+                        typeFilter === "Semua"
+                          ? true
+                          : it.type === typeFilter.toLowerCase(),
+                      )
+                      .filter((it) => {
+                        const q = search.trim().toLowerCase();
+                        if (!q) return true;
+                        return (
+                          it.url.toLowerCase().includes(q) ||
+                          it.niche.toLowerCase().includes(q)
+                        );
+                      })
+                      .map((it) => (
                       <TableRow key={it.id}>
                         <TableCell className="font-mono text-xs max-w-[360px] truncate">
                           <a
@@ -256,6 +359,9 @@ export default function RssSourcesPage() {
                           <Badge className="bg-cyan-500 text-white hover:bg-cyan-500">
                             {it.niche || "-"}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <TypeBadge type={it.type} />
                         </TableCell>
                         <TableCell>
                           {it.active ? (
