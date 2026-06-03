@@ -41,6 +41,26 @@ async function recordApiUsage(opts: {
         domainId: opts.domainId ?? null,
       },
     });
+
+    // Roll up into monthly BudgetState — isolated so failure here doesn't block the caller.
+    try {
+      const currentPeriod = new Date().toISOString().slice(0, 7);
+      const costCents = Math.round(costUsd * 100);
+      await prisma.budgetState.upsert({
+        where: { period: currentPeriod },
+        create: {
+          period: currentPeriod,
+          spentCents: costCents,
+          capCents: 30000,
+          alertSent: false,
+        },
+        update: {
+          spentCents: { increment: costCents },
+        },
+      });
+    } catch (budgetErr) {
+      console.warn("[budget-state] upsert failed:", budgetErr);
+    }
   } catch (err) {
     // Non-critical — don't break the caller
     console.error("[api-usage] record failed:", err);
