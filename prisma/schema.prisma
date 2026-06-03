@@ -518,6 +518,7 @@ model RssSource {
   id              String   @id @default(cuid())
   name            String
   url             String   @unique
+  niche           String   @default("")
   language        String   @default("id")
   region          String   @default("ID")
   active          Boolean  @default(true)

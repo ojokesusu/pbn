@@ -37,8 +37,9 @@ export async function POST(request: NextRequest) {
   if (denied) return denied;
   try {
     const body = await request.json().catch(() => ({}));
-    const name = typeof body.name === "string" ? body.name.trim() : "";
+    let name = typeof body.name === "string" ? body.name.trim() : "";
     const url = typeof body.url === "string" ? body.url.trim() : "";
+    const niche = typeof body.niche === "string" ? body.niche.trim() : "";
     const language =
       typeof body.language === "string" && body.language.trim()
         ? body.language.trim()
@@ -47,17 +48,27 @@ export async function POST(request: NextRequest) {
       typeof body.region === "string" && body.region.trim()
         ? body.region.trim()
         : "ID";
-    const active = typeof body.active === "boolean" ? body.active : true;
+    const active =
+      typeof body.active === "boolean"
+        ? body.active
+        : typeof body.enabled === "boolean"
+          ? body.enabled
+          : true;
 
-    if (!name) {
-      return NextResponse.json({ error: "name is required" }, { status: 400 });
-    }
     if (!url) {
       return NextResponse.json({ error: "url is required" }, { status: 400 });
     }
+    if (!name) {
+      // Derive name from URL host if not supplied (UI form only sends url+niche).
+      try {
+        name = new URL(url).hostname.replace(/^www\./, "");
+      } catch {
+        name = url;
+      }
+    }
 
     const source = await prisma.rssSource.create({
-      data: { name, url, language, region, active },
+      data: { name, url, niche, language, region, active },
     });
 
     return NextResponse.json({ source }, { status: 201 });

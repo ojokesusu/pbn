@@ -347,10 +347,26 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu className="gap-0.5">
                 {visibleItems.map((item) => {
-                  const isActive =
-                    item.href === "/"
-                      ? pathname === "/"
-                      : pathname.startsWith(item.href)
+                  // Match rules:
+                  // - "/" must match exactly (otherwise it would match every path).
+                  // - For other items, accept exact match OR path prefix on a slash
+                  //   boundary (e.g. "/content" matches "/content/foo" but NOT "/contents").
+                  // - If a sibling item has a more specific (longer) match, yield to it
+                  //   so child rows don't double-highlight with their parent.
+                  const matches = (href: string) => {
+                    if (href === "/") return pathname === "/"
+                    return pathname === href || pathname.startsWith(href + "/")
+                  }
+                  const selfMatches = matches(item.href)
+                  const hasMoreSpecificSibling = selfMatches
+                    ? visibleItems.some(
+                        (other) =>
+                          other.href !== item.href &&
+                          other.href.length > item.href.length &&
+                          matches(other.href)
+                      )
+                    : false
+                  const isActive = selfMatches && !hasMoreSpecificSibling
                   const badgeText = item.badge ? item.badge(stats) : null
                   const badgeTone: BadgeTone = item.badgeTone
                     ? item.badgeTone(stats)

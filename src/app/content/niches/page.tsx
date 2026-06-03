@@ -20,7 +20,7 @@ import {
 
 type NicheMapping = {
   domainId: string;
-  domain: string;
+  domain: { id: string; name: string; url: string; genre?: string } | null;
   niche: string | null;
   updatedAt: string | null;
 };
@@ -78,9 +78,13 @@ export default function NicheMappingPage() {
     const q = search.trim().toLowerCase();
     if (!q) return items;
     return items.filter(
-      (it) =>
-        it.domain.toLowerCase().includes(q) ||
-        (it.niche || "").toLowerCase().includes(q),
+      (it) => {
+        const domainStr = (it.domain?.url || it.domain?.name || "").toLowerCase();
+        return (
+          domainStr.includes(q) ||
+          (it.niche || "").toLowerCase().includes(q)
+        );
+      },
     );
   }, [items, search]);
 
@@ -196,7 +200,7 @@ export default function NicheMappingPage() {
                         return (
                           <TableRow key={it.domainId}>
                             <TableCell className="font-medium font-mono text-xs">
-                              {it.domain}
+                              {it.domain?.url || it.domain?.name || "(unknown)"}
                             </TableCell>
                             <TableCell>
                               <Badge className={nicheBadgeStyle(it.niche)}>

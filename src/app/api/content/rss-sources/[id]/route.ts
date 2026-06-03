@@ -16,12 +16,17 @@ export async function PATCH(
 
     const data: Record<string, unknown> = {};
     if (typeof body.active === "boolean") data.active = body.active;
+    // Accept legacy UI field name `enabled` as alias for `active`.
+    if (typeof body.enabled === "boolean" && typeof body.active !== "boolean") {
+      data.active = body.enabled;
+    }
     if (typeof body.name === "string" && body.name.trim()) data.name = body.name.trim();
     if (typeof body.url === "string" && body.url.trim()) data.url = body.url.trim();
     if (typeof body.language === "string" && body.language.trim())
       data.language = body.language.trim();
     if (typeof body.region === "string" && body.region.trim())
       data.region = body.region.trim();
+    if (typeof body.niche === "string") data.niche = body.niche.trim();
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json(

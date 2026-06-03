@@ -22,7 +22,7 @@ type RssSource = {
   id: string;
   url: string;
   niche: string;
-  enabled: boolean;
+  active: boolean;
   lastFetchedAt: string | null;
   lastError: string | null;
   itemCount: number;
@@ -46,7 +46,27 @@ export default function RssSourcesPage() {
       const res = await fetch("/api/content/rss-sources");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setItems(Array.isArray(data) ? data : (data.items ?? []));
+      const raw: Array<Record<string, unknown>> = Array.isArray(data)
+        ? data
+        : ((data.items as Array<Record<string, unknown>>) ?? []);
+      const normalized: RssSource[] = raw.map((r) => ({
+        id: String(r.id ?? ""),
+        url: String(r.url ?? ""),
+        niche: typeof r.niche === "string" ? r.niche : "",
+        active: typeof r.active === "boolean" ? r.active : true,
+        lastFetchedAt:
+          typeof r.lastFetched === "string"
+            ? r.lastFetched
+            : typeof r.lastFetchedAt === "string"
+              ? r.lastFetchedAt
+              : null,
+        lastError:
+          typeof r.lastError === "string" ? r.lastError : null,
+        itemCount: typeof r.itemCount === "number" ? r.itemCount : 0,
+        createdAt:
+          typeof r.createdAt === "string" ? r.createdAt : null,
+      }));
+      setItems(normalized);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
@@ -87,16 +107,20 @@ export default function RssSourcesPage() {
 
   async function handleToggle(it: RssSource) {
     setBusy((s) => ({ ...s, [it.id]: true }));
+    const nextActive = !it.active;
     try {
       const res = await fetch(`/api/content/rss-sources/${it.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: !it.enabled }),
+        body: JSON.stringify({ active: nextActive }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || `HTTP ${res.status}`);
+      }
       setItems((prev) =>
         prev.map((x) =>
-          x.id === it.id ? { ...x, enabled: !x.enabled } : x,
+          x.id === it.id ? { ...x, active: nextActive } : x,
         ),
       );
     } catch (e) {
@@ -234,7 +258,7 @@ export default function RssSourcesPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {it.enabled ? (
+                          {it.active ? (
                             <Badge className="bg-emerald-500 text-white hover:bg-emerald-500">
                               enabled
                             </Badge>
@@ -260,7 +284,7 @@ export default function RssSourcesPage() {
                               disabled={busy[it.id]}
                               onClick={() => handleToggle(it)}
                             >
-                              {it.enabled ? "Disable" : "Enable"}
+                              {it.active ? "Disable" : "Enable"}
                             </Button>
                             <Button
                               variant="outline"
