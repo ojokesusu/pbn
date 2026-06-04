@@ -10,7 +10,13 @@ export async function GET() {
     let config = await prisma.backlinkConfig.findFirst();
     if (!config) {
       config = await prisma.backlinkConfig.create({
-        data: { maxPerDomain: 3, maxPerArticle: 1, percentArticles: 30 },
+        data: {
+          maxPerDomain: 3,
+          maxPerArticle: 1,
+          percentArticles: 30,
+          maxPerDay: 200,
+          maxPerServerPerDay: 6,
+        },
       });
     }
 
@@ -31,6 +37,9 @@ export async function GET() {
 
     const dailyLimit = config.maxPerDay || 15;
     const remainingToday = Math.max(0, dailyLimit - placedToday);
+    // maxPerServerPerDay not yet in schema — fallback to 6
+    const perServerCap =
+      (config as unknown as { maxPerServerPerDay?: number }).maxPerServerPerDay ?? 6;
 
     const targetArticles = Math.floor(totalArticles * (config.percentArticles / 100));
     const articlesLinked = articlesWithBacklinks.length;
@@ -58,11 +67,54 @@ export async function GET() {
       isFull: d._count.backlinkPlacements >= config!.maxPerDomain,
     }));
 
+    // Per-server breakdown for today's placements
+    const todayPlacements = await prisma.backlinkPlacement.findMany({
+      where: { createdAt: { gte: todayStart } },
+      select: {
+        article: {
+          select: {
+            domain: {
+              select: {
+                serverId: true,
+                server: { select: { name: true, host: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const serverMap = new Map<
+      string,
+      { serverId: string; hostname: string; ipAddress: string; placed: number; cap: number }
+    >();
+    for (const p of todayPlacements) {
+      const serverId = p.article?.domain?.serverId;
+      if (!serverId) continue;
+      const srv = p.article?.domain?.server;
+      const existing = serverMap.get(serverId);
+      if (existing) {
+        existing.placed += 1;
+      } else {
+        serverMap.set(serverId, {
+          serverId,
+          hostname: srv?.name || "",
+          ipAddress: srv?.host || "",
+          placed: 1,
+          cap: perServerCap,
+        });
+      }
+    }
+    const serverStats = Array.from(serverMap.values())
+      .sort((a, b) => b.placed - a.placed)
+      .slice(0, 10);
+
     return NextResponse.json({
       config: {
         maxPerDomain: config.maxPerDomain,
         maxPerArticle: config.maxPerArticle,
         percentArticles: config.percentArticles,
+        perServerCap,
       },
       stats: {
         totalBacklinks,
@@ -74,8 +126,10 @@ export async function GET() {
         dailyLimit,
         placedToday,
         remainingToday,
+        perServerCap,
       },
       domains: domainStats,
+      serverStats,
     });
   } catch (error) {
     console.error("Backlink stats error:", error);

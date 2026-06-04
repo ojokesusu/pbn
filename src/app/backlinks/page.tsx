@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Pencil, Trash2, Link2, Upload, Shuffle, Settings2, Search, ChevronLeft, ChevronRight, Loader2, CheckCircle2, Target, BarChart3, ExternalLink, FileText } from "lucide-react"
+import { Plus, Pencil, Trash2, Link2, Upload, Shuffle, Settings2, Search, ChevronLeft, ChevronRight, Loader2, CheckCircle2, Target, BarChart3, ExternalLink, FileText, Server } from "lucide-react"
 
 import { SidebarInset } from "@/components/ui/sidebar"
 import { useConfirm } from "@/components/ui/confirm-modal"
@@ -49,14 +49,24 @@ interface DomainStat {
   isFull: boolean
 }
 
+interface ServerStat {
+  serverId: string
+  hostname: string
+  ipAddress: string
+  placed: number
+  cap: number
+}
+
 interface DistroStats {
-  config: { maxPerDomain: number; maxPerArticle: number; percentArticles: number }
+  config: { maxPerDomain: number; maxPerArticle: number; percentArticles: number; perServerCap?: number }
   stats: {
     totalBacklinks: number; totalPlacements: number; totalArticles: number
     targetArticles: number; articlesLinked: number; progressPercent: number
     dailyLimit: number; placedToday: number; remainingToday: number
+    perServerCap?: number
   }
   domains: DomainStat[]
+  serverStats?: ServerStat[]
 }
 
 export default function BacklinksPage() {
@@ -349,6 +359,68 @@ export default function BacklinksPage() {
             </div>
             {distributeResult && (
               <p className="text-xs mt-2 font-medium" style={{ color: "#10b981" }}>{distributeResult}</p>
+            )}
+          </div>
+        )}
+
+        {/* Per-Server Distribution card */}
+        {!loading && distroStats && (
+          <div className="rounded-xl border p-5 mb-6 shadow-sm" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Server className="size-4" style={{ color: "#0ea5e9" }} />
+                <div>
+                  <h3 className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>Per-Server Distribution</h3>
+                  <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                    Top 10 source server hari ini · cap {distroStats.stats.perServerCap ?? distroStats.config.perServerCap ?? 6}/server
+                  </p>
+                </div>
+              </div>
+              {distroStats.serverStats && distroStats.serverStats.length > 0 && (
+                <span className="text-[10px] font-medium" style={{ color: "var(--muted-foreground)" }}>
+                  {distroStats.serverStats.length} server aktif
+                </span>
+              )}
+            </div>
+            {!distroStats.serverStats || distroStats.serverStats.length === 0 ? (
+              <div className="py-6 text-center text-xs" style={{ color: "var(--muted-foreground)" }}>
+                Belum ada backlink ditempatkan hari ini. Server breakdown muncul setelah distribusi pertama.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {distroStats.serverStats.map((s) => {
+                  const cap = s.cap || distroStats.stats.perServerCap || distroStats.config.perServerCap || 6
+                  const percent = cap > 0 ? Math.min(100, Math.round((s.placed / cap) * 100)) : 0
+                  const isFull = s.placed >= cap
+                  const label = s.hostname || s.ipAddress || s.serverId
+                  return (
+                    <div key={s.serverId} className="flex items-center gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-medium truncate" style={{ color: "var(--secondary-foreground)" }} title={`${s.hostname} (${s.ipAddress})`}>
+                            {label}
+                          </span>
+                          <span className="text-[10px] font-medium tabular-nums shrink-0 ml-2" style={{ color: isFull ? "#10b981" : "#0ea5e9" }}>
+                            {s.placed}/{cap}
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "var(--muted)" }}>
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${percent}%`,
+                              background: isFull
+                                ? "linear-gradient(90deg, #10b981, #34d399)"
+                                : "linear-gradient(90deg, #0ea5e9, #38bdf8)",
+                              transition: "width 0.5s ease",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </div>
         )}

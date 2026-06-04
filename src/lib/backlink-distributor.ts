@@ -118,14 +118,23 @@ export type DistributeResult = {
   remainingToday: number;
   details: Array<{ articleTitle: string; domain: string; anchor: string; url: string; type: string }>;
   message: string;
+  perServerStats?: Record<string, { placed: number; cap: number }>;
 };
 
 export async function distributeBacklinks(): Promise<DistributeResult> {
   // Config
   let config = await prisma.backlinkConfig.findFirst();
   if (!config) {
+    // Seeded with current fleet defaults — 33+ server era. Schema defaults
+    // are the same; keep this in sync if the schema changes.
     config = await prisma.backlinkConfig.create({
-      data: { maxPerDomain: 3, maxPerArticle: 1, percentArticles: 30, maxPerDay: 15 },
+      data: {
+        maxPerDomain: 3,
+        maxPerArticle: 1,
+        percentArticles: 30,
+        maxPerDay: 200,
+        maxPerServerPerDay: 6,
+      },
     });
   }
 
@@ -135,8 +144,22 @@ export async function distributeBacklinks(): Promise<DistributeResult> {
   const placedToday = await prisma.backlinkPlacement.count({
     where: { createdAt: { gte: todayStart } },
   });
-  const dailyLimit = config.maxPerDay || 15;
+  const dailyLimit = config.maxPerDay || 200;
   const remainingToday = Math.max(0, dailyLimit - placedToday);
+
+  // Per-source-server daily cap. Source server = the server hosting the PBN
+  // article where the backlink is placed (Article → Domain → Server).
+  const maxPerServerPerDay = (config as unknown as { maxPerServerPerDay?: number })
+    .maxPerServerPerDay ?? Number.POSITIVE_INFINITY;
+  const placementsTodayByServer = await prisma.backlinkPlacement.findMany({
+    where: { createdAt: { gte: todayStart } },
+    select: { article: { select: { domain: { select: { serverId: true } } } } },
+  });
+  const perServerToday: Record<string, number> = {};
+  for (const p of placementsTodayByServer) {
+    const sid = p.article?.domain?.serverId ?? "_unassigned";
+    perServerToday[sid] = (perServerToday[sid] ?? 0) + 1;
+  }
 
   if (remainingToday <= 0) {
     return {
@@ -222,6 +245,11 @@ export async function distributeBacklinks(): Promise<DistributeResult> {
     const remainingSlots = config.maxPerDomain - existingCount;
     if (remainingSlots <= 0) continue;
 
+    // All articles in a domain share the same source server, so we can short-
+    // circuit the entire domain if its server has already hit the daily cap.
+    const domainServerId = domainArticles[0]?.domain?.serverId ?? "_unassigned";
+    if ((perServerToday[domainServerId] ?? 0) >= maxPerServerPerDay) continue;
+
     const shuffledArticles = [...domainArticles].sort(() => Math.random() - 0.5);
     const targetForDomain = Math.min(
       Math.ceil(shuffledArticles.length * (config.percentArticles / 100)),
@@ -235,6 +263,8 @@ export async function distributeBacklinks(): Promise<DistributeResult> {
       if (totalPlaced >= targetArticleCount) break;
       if (totalPlaced >= remainingToday) break;
       if (article.backlinkPlacements.length >= config.maxPerArticle) continue;
+      const articleServerId = article.domain?.serverId ?? "_unassigned";
+      if ((perServerToday[articleServerId] ?? 0) >= maxPerServerPerDay) break;
 
       const existingBacklinkIds = new Set(article.backlinkPlacements.map((p) => p.backlinkId));
       const availableBacklink = sortedBacklinks.find((bl) => {
@@ -300,7 +330,18 @@ export async function distributeBacklinks(): Promise<DistributeResult> {
 
       placedInDomain++;
       totalPlaced++;
+      perServerToday[articleServerId] = (perServerToday[articleServerId] ?? 0) + 1;
     }
+  }
+
+  // Top 10 servers by today's placement count.
+  const perServerStats: Record<string, { placed: number; cap: number }> = {};
+  const capForReport = Number.isFinite(maxPerServerPerDay) ? maxPerServerPerDay : -1;
+  const sortedServers = Object.entries(perServerToday)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+  for (const [sid, count] of sortedServers) {
+    perServerStats[sid] = { placed: count, cap: capForReport };
   }
 
   return {
@@ -312,5 +353,6 @@ export async function distributeBacklinks(): Promise<DistributeResult> {
     remainingToday: remainingToday - totalPlaced,
     details,
     message: `Berhasil menyisipkan ${totalPlaced} backlink ke artikel`,
+    perServerStats,
   };
 }

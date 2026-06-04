@@ -26,26 +26,31 @@ export default function BacklinkSettingsPage() {
     maxPerDomain: 3,
     maxPerArticle: 1,
     percentArticles: 30,
+    maxPerServerPerDay: 6,
+    maxPerDay: 200,
   })
 
-  useEffect(() => {
-    async function fetchConfig() {
-      try {
-        const res = await fetch("/api/backlinks/config")
-        if (res.ok) {
-          const data = await res.json()
-          setConfig({
-            maxPerDomain: data.maxPerDomain,
-            maxPerArticle: data.maxPerArticle,
-            percentArticles: data.percentArticles,
-          })
-        }
-      } catch (error) {
-        console.error("Failed to fetch config:", error)
-      } finally {
-        setLoading(false)
+  async function fetchConfig() {
+    try {
+      const res = await fetch("/api/backlinks/config")
+      if (res.ok) {
+        const data = await res.json()
+        setConfig({
+          maxPerDomain: data.maxPerDomain,
+          maxPerArticle: data.maxPerArticle,
+          percentArticles: data.percentArticles,
+          maxPerServerPerDay: data.maxPerServerPerDay ?? 6,
+          maxPerDay: data.maxPerDay ?? 200,
+        })
       }
+    } catch (error) {
+      console.error("Failed to fetch config:", error)
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchConfig()
   }, [])
 
@@ -58,6 +63,7 @@ export default function BacklinkSettingsPage() {
         body: JSON.stringify(config),
       })
       if (res.ok) {
+        await fetchConfig()
         alert("Pengaturan berhasil disimpan")
       } else {
         alert("Gagal menyimpan pengaturan")
@@ -95,7 +101,7 @@ export default function BacklinkSettingsPage() {
             <CardContent className="space-y-6">
               {loading ? (
                 <div className="space-y-4">
-                  {Array.from({ length: 3 }).map((_, i) => (
+                  {Array.from({ length: 5 }).map((_, i) => (
                     <div key={i} className="h-12 rounded-lg animate-pulse" style={{ background: "var(--muted)" }} />
                   ))}
                 </div>
@@ -152,6 +158,40 @@ export default function BacklinkSettingsPage() {
                     </div>
                     <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
                       Berapa persen artikel yang akan mendapat backlink. Rekomendasi: 20-30%
+                    </p>
+                  </div>
+
+                  {/* Max Per Server Per Day */}
+                  <div className="space-y-2">
+                    <Label style={{ color: "var(--secondary-foreground)" }}>Maks Backlink per Server per Hari</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={1000}
+                      value={config.maxPerServerPerDay}
+                      onChange={(e) => setConfig({ ...config, maxPerServerPerDay: parseInt(e.target.value) || 6 })}
+                      className="rounded-lg w-32"
+                      style={{ borderColor: "var(--border)", color: "var(--secondary-foreground)" }}
+                    />
+                    <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                      Cap per source server IP. Total 33 server × 6 = 198/hari potensi.
+                    </p>
+                  </div>
+
+                  {/* Max Per Day (global) */}
+                  <div className="space-y-2">
+                    <Label style={{ color: "var(--secondary-foreground)" }}>Maks Backlink Global per Hari</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={10000}
+                      value={config.maxPerDay}
+                      onChange={(e) => setConfig({ ...config, maxPerDay: parseInt(e.target.value) || 200 })}
+                      className="rounded-lg w-32"
+                      style={{ borderColor: "var(--border)", color: "var(--secondary-foreground)" }}
+                    />
+                    <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                      Plafon global hari ini (ops safety). Min(server-cap × jumlah server, plafon ini).
                     </p>
                   </div>
 

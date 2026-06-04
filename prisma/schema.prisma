@@ -203,12 +203,13 @@ model BacklinkPlacement {
 }
 
 model BacklinkConfig {
-  id              String   @id @default(cuid())
-  maxPerDomain    Int      @default(3)
-  maxPerArticle   Int      @default(1)
-  percentArticles Int      @default(30)
-  maxPerDay       Int      @default(15)
-  updatedAt       DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  maxPerDomain       Int      @default(3)
+  maxPerArticle      Int      @default(1)
+  percentArticles    Int      @default(30)
+  maxPerDay          Int      @default(200)
+  maxPerServerPerDay Int      @default(6)
+  updatedAt          DateTime @updatedAt
 
   @@schema("pbn")
 }
