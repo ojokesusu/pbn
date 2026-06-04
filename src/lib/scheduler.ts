@@ -14,6 +14,7 @@ import { notify, checkMilestones } from "./notifications";
 import { pollinationsFromGenre } from "./pollinations";
 import { fetchNews, fetchFromActiveSources, fetchArticleFull } from "./rss-scraper";
 import { fetchFromActiveContentSources } from "./content-sources";
+import { pickImages } from "./images";
 
 const AUTHOR_NAMES = [
   "Rina Puspitasari", "Ahmad Fauzi", "Dewi Lestari", "Budi Santoso",
@@ -97,6 +98,27 @@ function injectExtraImages(content: string, genre: string, title: string): strin
     result = result.slice(0, pos) + imgTag + result.slice(pos);
   }
   return result;
+}
+
+// Inject a <figure> with image into the body HTML at the midpoint —
+// splits on the first </p> past the 50% character mark. Used by the new
+// pickImages pipeline for the second (middle-body) image.
+function injectMidBodyImage(
+  content: string,
+  imageUrl: string,
+  alt: string,
+  attribution: string,
+): string {
+  const midpoint = Math.floor(content.length / 2);
+  const closingTag = "</p>";
+  const afterMid = content.indexOf(closingTag, midpoint);
+  const figure = `<figure><img src="${imageUrl}" alt="${alt}"/><figcaption>${attribution}</figcaption></figure>`;
+  if (afterMid === -1) {
+    // No </p> after midpoint → just append
+    return content + figure;
+  }
+  const insertAt = afterMid + closingTag.length;
+  return content.slice(0, insertAt) + figure + content.slice(insertAt);
 }
 
 function slugify(text: string): string {
@@ -400,10 +422,35 @@ export async function initialDomainSetup(domainId: string, articleCount: number 
         });
         if (existing) continue;
 
-        const featuredImage = await fetchArticleImage(genre, article.title);
+        let featuredImage = await fetchArticleImage(genre, article.title);
         const authorName = AUTHOR_NAMES[Math.floor(Math.random() * AUTHOR_NAMES.length)];
         const catId = dbCats[catNames[i % catNames.length]];
-        const enrichedContent = injectExtraImages(article.content, genre, article.title);
+        let enrichedContent = injectExtraImages(article.content, genre, article.title);
+
+        // New image pipeline: pickImages for header + middle-body.
+        // Image failure must NOT block article persistence — wrapped in try/catch.
+        try {
+          const images = await pickImages({
+            niche: domain.nicheMapping?.niche,
+            articleUrl: sourceContext?.url,
+            query: article.title,
+            language: "id",
+          });
+          if (images?.[0]?.url) {
+            featuredImage = images[0].url;
+          }
+          if (images?.[1]?.url) {
+            const mid = images[1];
+            enrichedContent = injectMidBodyImage(
+              enrichedContent,
+              mid.url,
+              article.title,
+              mid.attribution ?? "",
+            );
+          }
+        } catch (imgErr) {
+          console.warn(`[scheduler] pickImages failed (initial setup):`, imgErr);
+        }
 
         await prisma.article.create({
           data: {
@@ -475,9 +522,34 @@ export async function generateSingleArticle(domainId: string): Promise<{
     });
     if (existing) return { success: false, message: "Duplicate slug" };
 
-    const featuredImage = await fetchArticleImage(genre, article.title);
+    let featuredImage = await fetchArticleImage(genre, article.title);
     const authorName = AUTHOR_NAMES[Math.floor(Math.random() * AUTHOR_NAMES.length)];
-    const enrichedContent = injectExtraImages(article.content, genre, article.title);
+    let enrichedContent = injectExtraImages(article.content, genre, article.title);
+
+    // New image pipeline: pickImages for header + middle-body.
+    // Image failure must NOT block article persistence — wrapped in try/catch.
+    try {
+      const images = await pickImages({
+        niche: domain.nicheMapping?.niche,
+        articleUrl: sourceContext?.url,
+        query: article.title,
+        language: "id",
+      });
+      if (images?.[0]?.url) {
+        featuredImage = images[0].url;
+      }
+      if (images?.[1]?.url) {
+        const mid = images[1];
+        enrichedContent = injectMidBodyImage(
+          enrichedContent,
+          mid.url,
+          article.title,
+          mid.attribution ?? "",
+        );
+      }
+    } catch (imgErr) {
+      console.warn(`[scheduler] pickImages failed (single article):`, imgErr);
+    }
 
     // Find a random category for this domain
     const categories = await prisma.category.findMany({ where: { domainId }, take: 5 });
