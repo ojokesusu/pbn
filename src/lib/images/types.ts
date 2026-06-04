@@ -8,6 +8,7 @@ export interface ImageContext {
   articleUrl?: string;       // from RSS source.url
   query?: string;            // article title or topic
   language?: string;         // default 'id'
+  rssImageUrl?: string;      // image URL provided directly by the source RSS feed
 }
 
 export interface ImageResult {

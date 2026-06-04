@@ -174,10 +174,16 @@ function buildQueryFromNiche(
   return (mapping?.niche || genre || "berita").trim();
 }
 
+// Local extension of ArticleSourceContext that also carries the RSS item's
+// imageUrl (if any). We don't widen the shared ArticleSourceContext type in
+// anthropic.ts — consumers there only need title/content/url. The image flows
+// straight to pickImages via the new rss_image adapter.
+export type HybridContextWithImage = ArticleSourceContext & { imageUrl?: string };
+
 export async function buildHybridContext(
   domain: DomainForHybrid,
   sourceLimit: number = 3,
-): Promise<ArticleSourceContext | null> {
+): Promise<HybridContextWithImage | null> {
   try {
     const mapping = domain.nicheMapping;
     const language = mapping?.language || "id";
@@ -284,6 +290,7 @@ export async function buildHybridContext(
       title: top.title,
       content: body,
       url: top.link,
+      imageUrl: (top as { imageUrl?: string }).imageUrl,
     };
   } catch (err) {
     console.warn(`[scheduler] buildHybridContext failed:`, err);
@@ -399,7 +406,7 @@ export async function initialDomainSetup(domainId: string, articleCount: number 
       try {
         // HYBRID mode: fetch a source article from Google News RSS to rewrite.
         // PURE_AI (default): sourceContext stays undefined → existing prompt flow.
-        let sourceContext: ArticleSourceContext | undefined;
+        let sourceContext: HybridContextWithImage | undefined;
         if (hybridMode) {
           const ctx = await buildHybridContext(
             { id: domain.id, genre: domain.genre, nicheMapping: domain.nicheMapping },
@@ -432,6 +439,7 @@ export async function initialDomainSetup(domainId: string, articleCount: number 
           const images = await pickImages({
             niche: domain.nicheMapping?.niche,
             articleUrl: sourceContext?.url,
+            rssImageUrl: sourceContext?.imageUrl,
             query: article.title,
             language: "id",
           });
@@ -499,7 +507,7 @@ export async function generateSingleArticle(domainId: string): Promise<{
   try {
     // HYBRID mode: fetch RSS source for rewrite. PURE_AI (default): no source.
     const cfg = await getSchedulerConfig();
-    let sourceContext: ArticleSourceContext | undefined;
+    let sourceContext: HybridContextWithImage | undefined;
     if (cfg.contentMode === "hybrid_rss") {
       const ctx = await buildHybridContext(
         { id: domain.id, genre: domain.genre, nicheMapping: domain.nicheMapping },
@@ -531,6 +539,7 @@ export async function generateSingleArticle(domainId: string): Promise<{
       const images = await pickImages({
         niche: domain.nicheMapping?.niche,
         articleUrl: sourceContext?.url,
+        rssImageUrl: sourceContext?.imageUrl,
         query: article.title,
         language: "id",
       });

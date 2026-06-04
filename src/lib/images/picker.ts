@@ -18,13 +18,13 @@ import type { ImageContext, ImageResult } from "./types";
 // stays empty and the scheduler keeps whatever featuredImage the legacy
 // fetchArticleImage helper set as baseline.
 const PRIORITY_BY_NICHE: Record<string, string[]> = {
-  politik: ["og_scrape", "wikipedia", "unsplash", "pexels"],
-  news: ["og_scrape", "wikipedia", "unsplash", "pexels"],
-  bola: ["og_scrape", "wikipedia", "unsplash", "pexels"],
-  kriminal: ["og_scrape", "unsplash", "pexels"],
-  hiburan: ["og_scrape", "wikipedia", "unsplash", "pexels"],
-  musik: ["og_scrape", "wikipedia", "unsplash", "pexels"],
-  film: ["og_scrape", "wikipedia", "unsplash", "pexels"],
+  politik: ["rss_image", "og_scrape", "wikipedia", "unsplash", "pexels"],
+  news: ["rss_image", "og_scrape", "wikipedia", "unsplash", "pexels"],
+  bola: ["rss_image", "og_scrape", "wikipedia", "unsplash", "pexels"],
+  kriminal: ["rss_image", "og_scrape", "unsplash", "pexels"],
+  hiburan: ["rss_image", "og_scrape", "wikipedia", "unsplash", "pexels"],
+  musik: ["rss_image", "og_scrape", "wikipedia", "unsplash", "pexels"],
+  film: ["rss_image", "og_scrape", "wikipedia", "unsplash", "pexels"],
   gaming: ["unsplash", "pexels"],
   otomotif: ["unsplash", "pexels"],
   fashion: ["unsplash", "pexels"],
@@ -39,15 +39,16 @@ const PRIORITY_BY_NICHE: Record<string, string[]> = {
   finance: ["unsplash", "pexels"],
   business: ["unsplash", "pexels"],
   education: ["unsplash", "pexels"],
-  bencana: ["og_scrape", "wikipedia", "unsplash", "pexels"],
-  hukum: ["og_scrape", "wikipedia", "unsplash", "pexels"],
-  ekonomi: ["og_scrape", "wikipedia", "unsplash", "pexels"],
-  internasional: ["og_scrape", "wikipedia", "unsplash", "pexels"],
+  bencana: ["rss_image", "og_scrape", "wikipedia", "unsplash", "pexels"],
+  hukum: ["rss_image", "og_scrape", "wikipedia", "unsplash", "pexels"],
+  ekonomi: ["rss_image", "og_scrape", "wikipedia", "unsplash", "pexels"],
+  internasional: ["rss_image", "og_scrape", "wikipedia", "unsplash", "pexels"],
   religion: ["unsplash", "pexels"],
-  // iGaming — the ONLY niche where pollinations is allowed. og_scrape first
-  // in case a source RSS provides a real casino-promo image; otherwise
-  // pollinations renders neon/slot/cards aesthetic which fits.
-  igaming: ["og_scrape", "pollinations"],
+  // iGaming — the ONLY niche where pollinations is allowed. rss_image first
+  // (if the source feed supplied one), then og_scrape in case a source RSS
+  // provides a real casino-promo image; otherwise pollinations renders
+  // neon/slot/cards aesthetic which fits.
+  igaming: ["rss_image", "og_scrape", "pollinations"],
 };
 
 const DEFAULT_CHAIN = ["unsplash", "pexels"];

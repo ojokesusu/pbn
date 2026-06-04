@@ -9,12 +9,16 @@ export const rssGenericAdapter: ContentAdapter = {
   key: "rss_generic",
   async fetch(source: ContentSourceRow, limit: number): Promise<ContentItem[]> {
     const items = await fetchFromUrl(source.url, limit);
-    return items.map((a) => ({
-      title: a.title,
-      summary: a.summary || a.contentSnippet || "",
-      url: a.link,
-      publishedAt: a.published || "",
-      source: source.name, // prefer the curated source label over the feed's <source> tag
-    }));
+    return items.map((a) => {
+      const ci: ContentItem = {
+        title: a.title,
+        summary: a.summary || a.contentSnippet || "",
+        url: a.link,
+        publishedAt: a.published || "",
+        source: source.name, // prefer the curated source label over the feed's <source> tag
+      };
+      if (a.imageUrl) ci.imageUrl = a.imageUrl;
+      return ci;
+    });
   },
 };

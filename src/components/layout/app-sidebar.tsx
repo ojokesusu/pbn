@@ -30,6 +30,7 @@ import {
   Rss,
   Tag,
   ShieldAlert,
+  Gamepad2,
 } from "lucide-react"
 import { useMe } from "@/hooks/use-me"
 import { AvatarDisplay } from "@/components/ui/avatar-display"
@@ -64,6 +65,7 @@ type SidebarStats = {
   backlinkDailyLimit: number
   healthyServers?: number
   adultDomains?: number
+  iGamingDomains?: number
 }
 
 type BadgeTone = "teal" | "lime" | "red" | "amber" | "purple" | "pink" | "muted"
@@ -123,6 +125,17 @@ const MENU_GROUPS: NavGroup[] = [
         // the sidebar stays clean when the pool is clean.
         badge: (s) => (s?.adultDomains && s.adultDomains > 0 ? fmtCount(s.adultDomains) : null),
         badgeTone: () => "red",
+      },
+      {
+        title: "iGaming Domains",
+        href: "/domains/igaming",
+        icon: Gamepad2,
+        tourId: "nav-domain-igaming",
+        // Purple-pinned iGaming bucket — only shows count when operator has
+        // actually pinned domains. Keeps the sidebar clean for niches that
+        // aren't in use yet.
+        badge: (s) => (s?.iGamingDomains && s.iGamingDomains > 0 ? fmtCount(s.iGamingDomains) : null),
+        badgeTone: () => "purple",
       },
       {
         title: "Artikel",

@@ -9,8 +9,10 @@ import { wikipediaAdapter } from "./adapters/wikipedia";
 import { unsplashAdapter } from "./adapters/unsplash";
 import { pexelsAdapter } from "./adapters/pexels";
 import { pollinationsAdapter } from "./adapters/pollinations";
+import { rssImageAdapter } from "./adapters/rss-image";
 
 const REGISTRY: Record<string, ImageAdapter> = {
+  rss_image: rssImageAdapter,
   og_scrape: ogScrapeAdapter,
   wikipedia: wikipediaAdapter,
   unsplash: unsplashAdapter,

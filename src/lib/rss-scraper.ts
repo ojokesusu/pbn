@@ -19,6 +19,7 @@ export interface NewsArticle {
   contentSnippet: string;
   published: string;
   source: string;
+  imageUrl?: string;
 }
 
 // Alias for clarity at call sites that aggregate from arbitrary sources.
@@ -37,13 +38,26 @@ const FETCH_TIMEOUT_MS = 10_000;
 // rss-parser typing for custom item fields
 type CustomItem = {
   source?: string;
-  'media:content'?: { $: { url: string } };
+  'media:content'?: { $: { url?: string } };
+  'media:thumbnail'?: { $: { url?: string } };
+  enclosure?: { url?: string };
+  'itunes:image'?: { $: { href?: string } };
+  image?: unknown;
+  content?: string;
+  'content:encoded'?: string;
 };
 
 const parser: Parser<unknown, CustomItem> = new Parser({
   timeout: FETCH_TIMEOUT_MS,
   customFields: {
-    item: ['source', 'media:content'],
+    item: [
+      'source',
+      'media:content',
+      'media:thumbnail',
+      'enclosure',
+      'itunes:image',
+      'image',
+    ],
   },
   headers: {
     'User-Agent':
@@ -81,6 +95,44 @@ function extractSource(item: Parser.Item & CustomItem): string {
 }
 
 /**
+ * Best-effort image URL extraction from an RSS item.
+ *
+ * Lookup order (first hit wins):
+ *  1. <media:content url="...">
+ *  2. <media:thumbnail url="...">
+ *  3. <enclosure url="...">
+ *  4. <itunes:image href="...">
+ *  5. first <img src="..."> inside content / content:encoded
+ *
+ * Wrapped in try/catch — any failure returns undefined.
+ */
+function extractImageUrl(item: Parser.Item & CustomItem): string | undefined {
+  try {
+    const mediaContentUrl = item['media:content']?.['$']?.url;
+    if (mediaContentUrl) return mediaContentUrl;
+
+    const mediaThumbUrl = item['media:thumbnail']?.['$']?.url;
+    if (mediaThumbUrl) return mediaThumbUrl;
+
+    const enclosureUrl = item.enclosure?.url;
+    if (enclosureUrl) return enclosureUrl;
+
+    const itunesImageHref = item['itunes:image']?.['$']?.href;
+    if (itunesImageHref) return itunesImageHref;
+
+    const html = item['content:encoded'] ?? item.content ?? '';
+    if (html && typeof html === 'string') {
+      const $ = cheerio.load(html);
+      const src = $('img').first().attr('src');
+      if (src) return src;
+    }
+  } catch {
+    // swallow per-item extraction errors
+  }
+  return undefined;
+}
+
+/**
  * Fetch Google News RSS for a query.
  *
  * @param query   search query (will be URL-encoded)
@@ -112,14 +164,18 @@ export async function fetchNews(
     const items = (feed.items ?? []).slice(0, limit);
     const articles: NewsArticle[] = items.map((item) => {
       const summary = (item.contentSnippet ?? item.content ?? '').trim();
-      return {
+      const typedItem = item as Parser.Item & CustomItem;
+      const imageUrl = extractImageUrl(typedItem);
+      const article: NewsArticle = {
         title: (item.title ?? '').trim(),
         link: (item.link ?? '').trim(),
         summary,
         contentSnippet: summary,
         published: item.isoDate ?? item.pubDate ?? '',
-        source: extractSource(item as Parser.Item & CustomItem),
+        source: extractSource(typedItem),
       };
+      if (imageUrl) article.imageUrl = imageUrl;
+      return article;
     });
 
     if (cache) {
@@ -153,14 +209,18 @@ export async function fetchFromUrl(
     const items = (feed.items ?? []).slice(0, limit);
     return items.map((item) => {
       const summary = (item.contentSnippet ?? item.content ?? '').trim();
-      return {
+      const typedItem = item as Parser.Item & CustomItem;
+      const imageUrl = extractImageUrl(typedItem);
+      const article: Article = {
         title: (item.title ?? '').trim(),
         link: (item.link ?? '').trim(),
         summary,
         contentSnippet: summary,
         published: item.isoDate ?? item.pubDate ?? '',
-        source: extractSource(item as Parser.Item & CustomItem),
+        source: extractSource(typedItem),
       };
+      if (imageUrl) article.imageUrl = imageUrl;
+      return article;
     });
   } catch (err) {
     console.warn(
