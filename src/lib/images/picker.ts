@@ -9,36 +9,48 @@ import { getImageAdapter } from "./registry";
 import type { ImageContext, ImageResult } from "./types";
 
 // Niche -> ordered list of adapter keys. First adapter returning non-null wins.
+//
+// IMPORTANT RULE (Sandi 2026-06-04): Pollinations (AI) is ONLY used for
+// niche=igaming. AI images "keliatan banget AI-nya" — kills credibility on
+// news/politik/lifestyle articles. iGaming is the only niche where the
+// stylized casino/neon aesthetic matches AI-gen output. For every other
+// niche, if og_scrape + wikipedia + unsplash + pexels all miss, the slot
+// stays empty and the scheduler keeps whatever featuredImage the legacy
+// fetchArticleImage helper set as baseline.
 const PRIORITY_BY_NICHE: Record<string, string[]> = {
-  politik: ["og_scrape", "wikipedia", "unsplash", "pollinations"],
-  news: ["og_scrape", "wikipedia", "unsplash", "pollinations"],
-  bola: ["og_scrape", "wikipedia", "unsplash", "pollinations"],
-  kriminal: ["og_scrape", "unsplash", "pollinations"],
-  hiburan: ["og_scrape", "wikipedia", "unsplash", "pollinations"],
-  musik: ["og_scrape", "wikipedia", "unsplash", "pollinations"],
-  film: ["og_scrape", "wikipedia", "unsplash", "pollinations"],
-  gaming: ["unsplash", "pexels", "pollinations"],
-  otomotif: ["unsplash", "pexels", "pollinations"],
-  fashion: ["unsplash", "pexels", "pollinations"],
-  beauty: ["unsplash", "pexels", "pollinations"],
-  properti: ["unsplash", "pexels", "pollinations"],
-  travel: ["unsplash", "pexels", "pollinations"],
-  food: ["unsplash", "pexels", "pollinations"],
-  parenting: ["unsplash", "pexels", "pollinations"],
-  karir: ["unsplash", "pexels", "pollinations"],
-  health: ["unsplash", "pexels", "pollinations"],
-  tech: ["unsplash", "pexels", "pollinations"],
-  finance: ["unsplash", "pexels", "pollinations"],
-  business: ["unsplash", "pexels", "pollinations"],
-  education: ["unsplash", "pexels", "pollinations"],
-  bencana: ["og_scrape", "wikipedia", "unsplash", "pollinations"],
-  hukum: ["og_scrape", "wikipedia", "unsplash", "pollinations"],
-  ekonomi: ["og_scrape", "wikipedia", "unsplash", "pollinations"],
-  internasional: ["og_scrape", "wikipedia", "unsplash", "pollinations"],
-  religion: ["unsplash", "pexels", "pollinations"],
+  politik: ["og_scrape", "wikipedia", "unsplash", "pexels"],
+  news: ["og_scrape", "wikipedia", "unsplash", "pexels"],
+  bola: ["og_scrape", "wikipedia", "unsplash", "pexels"],
+  kriminal: ["og_scrape", "unsplash", "pexels"],
+  hiburan: ["og_scrape", "wikipedia", "unsplash", "pexels"],
+  musik: ["og_scrape", "wikipedia", "unsplash", "pexels"],
+  film: ["og_scrape", "wikipedia", "unsplash", "pexels"],
+  gaming: ["unsplash", "pexels"],
+  otomotif: ["unsplash", "pexels"],
+  fashion: ["unsplash", "pexels"],
+  beauty: ["unsplash", "pexels"],
+  properti: ["unsplash", "pexels"],
+  travel: ["unsplash", "pexels"],
+  food: ["unsplash", "pexels"],
+  parenting: ["unsplash", "pexels"],
+  karir: ["unsplash", "pexels"],
+  health: ["unsplash", "pexels"],
+  tech: ["unsplash", "pexels"],
+  finance: ["unsplash", "pexels"],
+  business: ["unsplash", "pexels"],
+  education: ["unsplash", "pexels"],
+  bencana: ["og_scrape", "wikipedia", "unsplash", "pexels"],
+  hukum: ["og_scrape", "wikipedia", "unsplash", "pexels"],
+  ekonomi: ["og_scrape", "wikipedia", "unsplash", "pexels"],
+  internasional: ["og_scrape", "wikipedia", "unsplash", "pexels"],
+  religion: ["unsplash", "pexels"],
+  // iGaming — the ONLY niche where pollinations is allowed. og_scrape first
+  // in case a source RSS provides a real casino-promo image; otherwise
+  // pollinations renders neon/slot/cards aesthetic which fits.
+  igaming: ["og_scrape", "pollinations"],
 };
 
-const DEFAULT_CHAIN = ["unsplash", "pexels", "pollinations"];
+const DEFAULT_CHAIN = ["unsplash", "pexels"];
 
 function chainFor(niche?: string): string[] {
   if (!niche) return DEFAULT_CHAIN;

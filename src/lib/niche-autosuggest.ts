@@ -93,6 +93,16 @@ const RULES: NicheRule[] = [
     keywords: ["film", "movie", "bioskop", "cinema", "sutradara", "premiere"],
   },
   {
+    niche: "igaming",
+    // iGaming = online gambling, casino, slot, betting, poker, sportsbook.
+    // Listed BEFORE 'gaming' so domains like "slotgacor.com" / "casino-vip.id"
+    // bucket here instead of regular esports gaming. Pollinations is allowed
+    // ONLY for this niche (Sandi rule [[feedback-pollinations-igaming-only]]).
+    strong: /\b(igaming|casino|slot|judi|taruhan|betting|poker|sportsbook|gacor|gambling|togel|bandar)\b/i,
+    weak: /(igaming|casino|slot|judi|taruhan|betting|poker|sportsbook|gacor|gambling|togel|bandar|jackpot|rolet|baccarat)/i,
+    keywords: ["igaming", "casino", "slot", "judi online", "taruhan", "betting"],
+  },
+  {
     niche: "gaming",
     strong: /\b(gaming|game|esports|mobilelegend|pubg|freefire|dota|valorant)\b/i,
     weak: /(gaming|game|esports|mobilelegend|pubg|freefire|dota|valorant|gamer)/i,
@@ -318,6 +328,7 @@ export const NICHE_LIST = [
   "hiburan",
   "musik",
   "film",
+  "igaming",
   "gaming",
   "tv",
   "otomotif",

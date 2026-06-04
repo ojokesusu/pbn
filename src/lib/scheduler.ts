@@ -60,14 +60,13 @@ async function fetchPexelsImage(genre: string): Promise<string> {
 }
 
 // Unified image fetcher — picks between Pexels (stock) and Pollinations (AI).
-// iGaming always uses Pollinations (unique per-article AI image).
-// Other genres: 50/50 alternating for content variety.
+// iGaming always uses Pollinations (unique per-article AI image; stylized
+// neon/casino aesthetic fits the genre).
+// Other genres: Pexels only — per Sandi rule 2026-06-04, Pollinations is
+// reserved for iGaming because AI images "keliatan banget AI-nya" and kill
+// credibility on news/lifestyle articles.
 async function fetchArticleImage(genre: string, title?: string): Promise<string> {
   if (genre === "iGaming") {
-    return pollinationsFromGenre(genre, title);
-  }
-  const usePollinations = Math.random() < 0.5;
-  if (usePollinations) {
     return pollinationsFromGenre(genre, title);
   }
   return fetchPexelsImage(genre);

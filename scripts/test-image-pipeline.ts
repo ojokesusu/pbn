@@ -63,6 +63,20 @@ async function main() {
     query: "indonesian street food",
     language: "id",
   });
+
+  // iGaming — ONLY niche that should hit Pollinations
+  await testCase("igaming", {
+    niche: "igaming",
+    query: "casino slot jackpot neon",
+    language: "id",
+  });
+
+  // News with miss-everywhere — should return 0/1 image, NOT fall back to AI
+  await testCase("news (all miss expected)", {
+    niche: "news",
+    query: "totallymadeupquerythatwillnotmatchanything12345",
+    language: "id",
+  });
 }
 
 main().catch((e) => {
