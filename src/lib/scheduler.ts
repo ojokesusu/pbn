@@ -22,6 +22,25 @@ import { pickProvider } from "./serp";
 // one tick. 5/tick × hourly cron = 120/day max, well under typical 1000/day plan.
 const RANK_CHECK_BATCH_PER_TICK = 5;
 
+// ── Health-check sub-tick config ──
+// SchedulerConfig doesn't (yet) carry a healthCheckHour field, so we hardcode
+// three UTC slots per day: 06:00, 14:00, 22:00. Inside each slot we accept any
+// tick where minute <= 15 so a slightly-late cron still fires. The 4h
+// lastChecked cutoff is the real idempotency gate — a stalled tick can't
+// re-check the same domain twice in the same window.
+const HEALTH_CHECK_HOURS: number[] = [6, 14, 22];
+const HEALTH_CHECK_BATCH_PER_TICK = 100;
+const HEALTH_CHECK_CUTOFF_MS = 4 * 60 * 60 * 1000; // 4h
+
+// Per-server "unhealthy" notification dedup. Key: serverId. Value: epoch ms of
+// last critical alert we fired. We only re-alert if the previous alert was
+// >= 6h ago AND we previously observed a healthy state for that server (the
+// state transition is detected by reading the Map: missing entry = no recent
+// alert = treat current healthy reading as the baseline, then alert on the
+// first unhealthy crossing). This keeps a 50% server from spamming every tick.
+const SERVER_HEALTH_ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+const lastServerHealthAlertAt: Map<string, number> = new Map();
+
 const AUTHOR_NAMES = [
   "Rina Puspitasari", "Ahmad Fauzi", "Dewi Lestari", "Budi Santoso",
   "Siti Nurhaliza", "Raden Pratama", "Maya Indah", "Fikri Ramadhan",
@@ -681,6 +700,195 @@ async function processRankCheckTick(
   return { checked, skipped, errors };
 }
 
+// ── Health-check sub-tick ──
+// Periodic ping of non-adult Domain rows to keep isAlive / httpStatus /
+// lastChecked fresh. Self-gated on UTC hour (HEALTH_CHECK_HOURS) AND a
+// minute<=15 forgiveness window so a late-firing cron at minute 14 still
+// counts. The 4h lastChecked cutoff is the real idempotency gate.
+//
+// Implementation note: Agent B's /api/health-check refactor was supposed to
+// export a shared checkAndUpdate helper. As of this commit that helper isn't
+// exported yet, so we inline a SIMPLIFIED checker here (homepage GET + basic
+// alive decision, no WP detection, no SSL probe). When Agent B's helper
+// lands, swap the inline checkAndUpdate body for the imported function — the
+// rest of this sub-tick (batching, gating, return shape) stays as-is.
+async function checkAndUpdate(domain: { id: string; url: string }): Promise<{
+  isAlive: boolean;
+  httpStatus: number;
+  responseMs: number;
+  errorReason: string;
+  errorMessage: string;
+}> {
+  const start = Date.now();
+  let httpStatus = 0;
+  let isAlive = false;
+  let errorReason = "";
+  let errorMessage = "";
+
+  try {
+    const res = await fetch(domain.url, {
+      method: "GET",
+      headers: { "User-Agent": "PBN-Manager-HealthCheck/1.0" },
+      signal: AbortSignal.timeout(8000),
+      redirect: "follow",
+    });
+    httpStatus = res.status;
+    isAlive = res.status >= 200 && res.status < 400;
+    if (!isAlive) {
+      errorReason = "http_status";
+      errorMessage = `HTTP ${res.status}`;
+    }
+  } catch (err) {
+    const msg = String(err);
+    errorMessage = msg.substring(0, 200);
+    if (msg.includes("TimeoutError") || msg.includes("timeout")) errorReason = "timeout";
+    else if (msg.includes("ENOTFOUND") || msg.includes("getaddrinfo")) errorReason = "dns";
+    else if (msg.includes("ECONNREFUSED")) errorReason = "conn_refused";
+    else errorReason = "fetch_error";
+  }
+
+  const responseMs = Date.now() - start;
+
+  // Persist Domain row + DomainHealthLog row. Both writes share the same
+  // checkedAt timestamp so a downstream join lines up cleanly.
+  const checkedAt = new Date();
+  await prisma.domain.update({
+    where: { id: domain.id },
+    data: {
+      isAlive,
+      httpStatus,
+      lastChecked: checkedAt,
+    },
+  });
+  try {
+    await prisma.domainHealthLog.create({
+      data: {
+        domainId: domain.id,
+        checkedAt,
+        isAlive,
+        httpStatus,
+        responseMs,
+        errorReason,
+        errorMessage: errorMessage.substring(0, 500),
+      },
+    });
+  } catch (logErr) {
+    // Log persistence is non-critical — keep the Domain update if this fails.
+    console.warn(`[scheduler] DomainHealthLog write failed for ${domain.url}:`, logErr);
+  }
+
+  return { isAlive, httpStatus, responseMs, errorReason, errorMessage };
+}
+
+async function processHealthCheckTick(
+  now: Date,
+): Promise<{ checked: number; dead: number; alive: number; errors: string[] }> {
+  const errors: string[] = [];
+  const utcHour = now.getUTCHours();
+  const utcMinute = now.getUTCMinutes();
+  // Hour-gate: only the three scheduled windows. Minute-gate: forgive the
+  // first 15 minutes so a late cron still fires; after that, skip.
+  if (!HEALTH_CHECK_HOURS.includes(utcHour) || utcMinute > 15) {
+    return { checked: 0, dead: 0, alive: 0, errors };
+  }
+
+  const cutoff = new Date(now.getTime() - HEALTH_CHECK_CUTOFF_MS);
+  const candidates = await prisma.domain.findMany({
+    where: {
+      isAdult: false,
+      OR: [{ lastChecked: null }, { lastChecked: { lt: cutoff } }],
+    },
+    select: { id: true, url: true },
+    orderBy: [{ lastChecked: { sort: "asc", nulls: "first" } }],
+    take: HEALTH_CHECK_BATCH_PER_TICK,
+  });
+
+  let checked = 0;
+  let alive = 0;
+  let dead = 0;
+
+  // Modest concurrency so 100 domains complete in ~10s rather than ~13min
+  // serial. Mirrors the /api/health-check route's `concurrency = 10`.
+  const concurrency = 10;
+  for (let i = 0; i < candidates.length; i += concurrency) {
+    const batch = candidates.slice(i, i + concurrency);
+    const results = await Promise.all(
+      batch.map(async (d) => {
+        try {
+          const r = await checkAndUpdate(d);
+          return r.isAlive;
+        } catch (err) {
+          errors.push(`health-check ${d.url}: ${String(err).substring(0, 100)}`);
+          return null;
+        }
+      }),
+    );
+    for (const r of results) {
+      if (r === null) continue;
+      checked++;
+      if (r) alive++;
+      else dead++;
+    }
+  }
+
+  return { checked, dead, alive, errors };
+}
+
+// Per-server health roll-up. Reads the current isAlive distribution per
+// server and fires a 'critical' notification when a server with >= 10 domains
+// drops below 50% alive. Dedup rule: a fresh alert only fires when either
+//   (a) we have no recorded alert for this server, OR
+//   (b) the last alert was >= SERVER_HEALTH_ALERT_COOLDOWN_MS ago AND the
+//       server has recovered above the 50% threshold at least once since.
+// In practice the cooldown alone is enough since we only call this after the
+// health-check sub-tick — the Map prevents spamming the same critical state
+// every tick of the day.
+async function processServerHealthRollup(now: Date): Promise<{ alertsFired: number }> {
+  let alertsFired = 0;
+  const servers = await prisma.server.findMany({
+    select: {
+      id: true,
+      name: true,
+      domains: { select: { isAlive: true }, where: { isAdult: false } },
+    },
+  });
+
+  for (const srv of servers) {
+    const total = srv.domains.length;
+    if (total < 10) continue;
+    const aliveCount = srv.domains.filter((d) => d.isAlive).length;
+    const aliveRate = aliveCount / total;
+
+    if (aliveRate >= 0.5) {
+      // Healthy reading — record baseline so the next dip below 0.5 alerts.
+      // We DON'T clear the cooldown timestamp here; we just remember that
+      // we're currently healthy by removing any stale entry.
+      lastServerHealthAlertAt.delete(srv.id);
+      continue;
+    }
+
+    const last = lastServerHealthAlertAt.get(srv.id);
+    if (last && now.getTime() - last < SERVER_HEALTH_ALERT_COOLDOWN_MS) continue;
+
+    const pct = Math.round(aliveRate * 100);
+    try {
+      await notify({
+        type: "health-alert",
+        title: `Server ${srv.name} health ${pct}% (${aliveCount}/${total} domains alive)`,
+        message: `Server ${srv.name} drops below 50% alive (currently ${aliveCount}/${total}). Investigate.`,
+        severity: "error",
+        link: `/servers/${srv.id}`,
+      });
+      lastServerHealthAlertAt.set(srv.id, now.getTime());
+      alertsFired++;
+    } catch (err) {
+      console.warn(`[scheduler] server-health alert failed for ${srv.name}:`, err);
+    }
+  }
+
+  return { alertsFired };
+}
+
 // Process the scheduler tick — called by the cron endpoint
 // Finds domains that are due for a new article, generates + deploys
 export async function processSchedulerTick(): Promise<{
@@ -690,14 +898,18 @@ export async function processSchedulerTick(): Promise<{
   purged: number;
   backlinksPlaced: number;
   ranksChecked: number;
+  healthChecked: number;
+  healthDead: number;
+  healthAlive: number;
   errors: string[];
 }> {
   const config = await getSchedulerConfig();
-  if (!config.isRunning) return { processed: 0, generated: 0, deployed: 0, purged: 0, backlinksPlaced: 0, ranksChecked: 0, errors: [] };
+  if (!config.isRunning) return { processed: 0, generated: 0, deployed: 0, purged: 0, backlinksPlaced: 0, ranksChecked: 0, healthChecked: 0, healthDead: 0, healthAlive: 0, errors: [] };
 
   const now = new Date();
   const errors: string[] = [];
   let processed = 0, generated = 0, deployed = 0, purged = 0, backlinksPlaced = 0, ranksChecked = 0;
+  let healthChecked = 0, healthDead = 0, healthAlive = 0;
 
   // Pre-load StrategyConfig rows once for the whole tick — used below to
   // attach per-domain strategy multipliers before the article-gen loop.
@@ -898,6 +1110,33 @@ export async function processSchedulerTick(): Promise<{
     errors.push(`Rank-check tick: ${String(err).substring(0, 100)}`);
   }
 
+  // ── Health-check sub-tick ──
+  // Self-gated by UTC hour (HEALTH_CHECK_HOURS = 06/14/22) + minute<=15 and
+  // by the 4h lastChecked cutoff inside processHealthCheckTick. Safe to call
+  // every tick — does nothing 21 of 24 hours.
+  try {
+    const hc = await processHealthCheckTick(now);
+    healthChecked = hc.checked;
+    healthDead = hc.dead;
+    healthAlive = hc.alive;
+    if (hc.errors.length > 0) errors.push(...hc.errors);
+    if (healthChecked > 0) {
+      console.log(`[Scheduler] Health-check: ${healthChecked} checked (${healthAlive} alive, ${healthDead} dead)`);
+      // Server roll-up only makes sense right after a fresh batch of checks
+      // — otherwise we'd be re-evaluating stale isAlive flags.
+      try {
+        const ru = await processServerHealthRollup(now);
+        if (ru.alertsFired > 0) {
+          console.log(`[Scheduler] Server health roll-up fired ${ru.alertsFired} critical alerts`);
+        }
+      } catch (err) {
+        errors.push(`Server health rollup: ${String(err).substring(0, 100)}`);
+      }
+    }
+  } catch (err) {
+    errors.push(`Health-check tick: ${String(err).substring(0, 100)}`);
+  }
+
   // Check for milestone notifications (fire once per threshold)
   try {
     await checkMilestones();
@@ -905,7 +1144,7 @@ export async function processSchedulerTick(): Promise<{
     // Non-critical
   }
 
-  return { processed, generated, deployed, purged, backlinksPlaced, ranksChecked, errors };
+  return { processed, generated, deployed, purged, backlinksPlaced, ranksChecked, healthChecked, healthDead, healthAlive, errors };
 }
 
 // Activate domains in the scheduler

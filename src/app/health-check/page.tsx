@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useState, useCallback } from "react"
-import { Activity, CheckCircle2, XCircle, FileText, Loader2, RefreshCw, Heart, Search, Server as ServerIcon, AlertTriangle, ChevronLeft, ChevronRight, Lightbulb, ChevronDown } from "lucide-react"
+import { Activity, CheckCircle2, XCircle, FileText, Loader2, RefreshCw, Heart, Search, Server as ServerIcon, AlertTriangle, ChevronLeft, ChevronRight, Lightbulb, ChevronDown, Clock, ShieldAlert, Zap } from "lucide-react"
 
 import { SidebarInset } from "@/components/ui/sidebar"
 import { useConfirm } from "@/components/ui/confirm-modal"
@@ -38,6 +38,11 @@ interface DeadDomain {
   httpStatus: number
   lastChecked: string | null
   server: { id: string; name: string; host: string } | null
+  // Optional health-quality fields (may be absent for older rows)
+  sslDaysLeft?: number | null
+  avgResponseMs?: number | null
+  errorReason?: string | null
+  firstFailureAt?: string | null
 }
 
 interface DeadData {
@@ -45,6 +50,32 @@ interface DeadData {
   domains: DeadDomain[]
   byReason: Array<{ reason: string; count: number }>
   byServer: Array<{ serverName: string; serverHost: string; count: number }>
+}
+
+interface ServerRollupRow {
+  id: string
+  label: string
+  host: string
+  total: number
+  alive: number
+  alivePct: number
+}
+
+// Map machine-readable errorReason → user-friendly Indonesian label.
+const REASON_LABELS: Record<string, string> = {
+  waf_block: "Diblok Cloudflare",
+  dns: "DNS gagal",
+  timeout: "Timeout",
+  ssl: "SSL bermasalah",
+  connection_refused: "Koneksi ditolak",
+  server_error: "Error server",
+  not_found: "Tidak ditemukan",
+  forbidden: "Akses ditolak",
+}
+
+function reasonLabel(reason?: string | null): string | null {
+  if (!reason) return null
+  return REASON_LABELS[reason] || reason
 }
 
 // Tips for fixing dead domains, keyed by HTTP status code (0 = timeout/DNS).
@@ -193,6 +224,9 @@ export default function HealthCheckPage() {
   const [deadPage, setDeadPage] = useState(1)
   const [expandedTip, setExpandedTip] = useState<string | null>(null)
   const deadPerPage = 25
+  // Server roll-up state
+  const [rollup, setRollup] = useState<ServerRollupRow[]>([])
+  const [rollupLoading, setRollupLoading] = useState(false)
 
   const fetchStats = useCallback(async () => {
     try {
@@ -221,10 +255,33 @@ export default function HealthCheckPage() {
     }
   }, [])
 
+  const fetchRollup = useCallback(async () => {
+    setRollupLoading(true)
+    try {
+      const res = await fetch("/api/health-check/server-rollup")
+      if (res.ok) {
+        const data = await res.json()
+        setRollup(data.servers || [])
+      }
+    } catch (err) {
+      console.error("Failed to fetch server roll-up:", err)
+    } finally {
+      setRollupLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchStats()
     fetchDead()
-  }, [fetchStats, fetchDead])
+    fetchRollup()
+  }, [fetchStats, fetchDead, fetchRollup])
+
+  // Long-standing issues: dead domains whose firstFailureAt is older than 24h.
+  const longStandingIssues = (deadData?.domains || []).filter((d) => {
+    if (!d.firstFailureAt) return false
+    const ageMs = Date.now() - new Date(d.firstFailureAt).getTime()
+    return ageMs > 24 * 60 * 60 * 1000
+  })
 
   // Filtered dead domains
   const filteredDead = (deadData?.domains || []).filter((d) => {
@@ -285,6 +342,7 @@ export default function HealthCheckPage() {
       }
       fetchStats()
       fetchDead()
+      fetchRollup()
     } catch (err) {
       console.error(err)
     } finally {
@@ -352,7 +410,7 @@ export default function HealthCheckPage() {
             variant="outline"
             className="rounded-lg"
             style={{ borderColor: "var(--border)", color: "var(--secondary-foreground)" }}
-            onClick={() => { fetchStats(); fetchDead(); }}
+            onClick={() => { fetchStats(); fetchDead(); fetchRollup(); }}
           >
             <RefreshCw className="size-4 mr-1" />
             Refresh
@@ -400,6 +458,138 @@ export default function HealthCheckPage() {
                 <p className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>Total Posts</p>
               </div>
               <p className="text-2xl font-bold" style={{ color: "#f59e0b" }}>{stats.totalPosts.toLocaleString()}</p>
+            </div>
+          </div>
+        )}
+
+        {/* === Server Roll-Up === */}
+        <div className="rounded-xl border shadow-sm mb-6 overflow-hidden" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+          <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center size-9 rounded-lg" style={{ background: "rgba(14,165,233,0.1)" }}>
+                <ServerIcon className="size-4" style={{ color: "#0ea5e9" }} />
+              </div>
+              <div>
+                <h3 className="font-semibold" style={{ color: "var(--foreground)" }}>Server Roll-Up</h3>
+                <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>Persentase domain hidup per server. Klik untuk filter daftar di bawah.</p>
+              </div>
+            </div>
+            {rollupLoading && <Loader2 className="size-4 animate-spin" style={{ color: "var(--muted-foreground)" }} />}
+          </div>
+
+          {rollup.length === 0 ? (
+            <div className="px-6 py-8 text-center text-sm" style={{ color: "var(--muted-foreground)" }}>
+              {rollupLoading ? "Memuat..." : "Belum ada data server."}
+            </div>
+          ) : (
+            <div className="grid gap-3 p-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+              {rollup.map((s) => {
+                const pct = s.alivePct
+                let color = "#ef4444"
+                let bg = "rgba(239,68,68,0.08)"
+                let border = "rgba(239,68,68,0.25)"
+                if (pct > 85) {
+                  color = "#10b981"
+                  bg = "rgba(16,185,129,0.08)"
+                  border = "rgba(16,185,129,0.25)"
+                } else if (pct >= 50) {
+                  color = "#f59e0b"
+                  bg = "rgba(245,158,11,0.08)"
+                  border = "rgba(245,158,11,0.25)"
+                }
+                const isActive = deadServerFilter === s.label
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => { setDeadServerFilter(isActive ? "" : s.label); setDeadPage(1) }}
+                    className="rounded-lg border p-3 text-left transition-all hover:shadow-md"
+                    style={{
+                      background: bg,
+                      borderColor: isActive ? color : border,
+                      borderWidth: isActive ? 2 : 1,
+                    }}
+                    title={`Filter daftar domain ke server ${s.label}`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="font-semibold text-sm truncate" style={{ color: "var(--foreground)" }}>{s.label}</div>
+                      <span className="text-xs font-bold tabular-nums" style={{ color }}>{pct}%</span>
+                    </div>
+                    <div className="text-[11px] font-mono mb-2 truncate" style={{ color: "var(--muted-foreground)" }}>{s.host}</div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <CheckCircle2 className="size-3" style={{ color }} />
+                      <span className="text-xs tabular-nums" style={{ color: "var(--secondary-foreground)" }}>
+                        <strong style={{ color }}>{s.alive}</strong> / {s.total} hidup
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "var(--muted)" }}>
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* === Long-Standing Issues === */}
+        {longStandingIssues.length > 0 && (
+          <div className="rounded-xl border shadow-sm mb-6 overflow-hidden" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+            <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center size-9 rounded-lg" style={{ background: "rgba(239,68,68,0.1)" }}>
+                  <Clock className="size-4" style={{ color: "#ef4444" }} />
+                </div>
+                <div>
+                  <h3 className="font-semibold" style={{ color: "var(--foreground)" }}>
+                    Long-Standing Issues ({longStandingIssues.length})
+                  </h3>
+                  <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                    Domain yang sudah gagal lebih dari 24 jam — prioritas tertinggi untuk di-fix.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="divide-y max-h-80 overflow-y-auto" style={{ borderColor: "var(--border)" }}>
+              {longStandingIssues.slice(0, 50).map((d) => {
+                const ageMs = Date.now() - new Date(d.firstFailureAt!).getTime()
+                const ageHours = ageMs / (1000 * 60 * 60)
+                const ageDays = ageHours / 24
+                const ageLabel = ageDays >= 1 ? `${Math.round(ageDays)} hari` : `${Math.round(ageHours)} jam`
+                const label = reasonLabel(d.errorReason)
+                return (
+                  <div key={d.id} className="px-6 py-3 flex items-center gap-3 text-sm">
+                    <AlertTriangle className="size-4 shrink-0" style={{ color: "#ef4444" }} />
+                    <div className="flex-1 min-w-0">
+                      <a
+                        href={d.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium hover:underline truncate block"
+                        style={{ color: "var(--secondary-foreground)" }}
+                      >
+                        {d.url.replace(/^https?:\/\//, "")}
+                      </a>
+                      <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                        {d.server?.name || "—"} · gagal {ageLabel}
+                      </span>
+                    </div>
+                    {label && (
+                      <Badge variant="outline" className="text-[10px]" style={{ background: "rgba(239,68,68,0.1)", color: "#dc2626", borderColor: "transparent" }}>
+                        {label}
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-[10px]" style={{ background: "rgba(239,68,68,0.1)", color: "#dc2626", borderColor: "transparent" }}>
+                      {d.httpStatus === 0 ? "TIMEOUT" : `HTTP ${d.httpStatus}`}
+                    </Badge>
+                  </div>
+                )
+              })}
+              {longStandingIssues.length > 50 && (
+                <div className="px-6 py-3 text-center text-xs" style={{ color: "var(--muted-foreground)" }}>
+                  Menampilkan 50 dari {longStandingIssues.length} domain.
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -596,6 +786,9 @@ export default function HealthCheckPage() {
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>Server</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>IP</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>SSL</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>Avg Response</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>Reason</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>Dicek</th>
                   </tr>
                 </thead>
@@ -654,6 +847,53 @@ export default function HealthCheckPage() {
                               />
                             </div>
                           </td>
+                          <td className="px-6 py-3">
+                            {(() => {
+                              const days = d.sslDaysLeft
+                              if (days == null) return <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>—</span>
+                              let color = "#64748b"
+                              let bg = "rgba(100,116,139,0.1)"
+                              let label = "OK"
+                              if (days < 0) { color = "#ef4444"; bg = "rgba(239,68,68,0.1)"; label = "Expired" }
+                              else if (days < 14) { color = "#f59e0b"; bg = "rgba(245,158,11,0.1)"; label = `${days} hari` }
+                              else if (days <= 30) { color = "#f59e0b"; bg = "rgba(245,158,11,0.1)"; label = `${days} hari` }
+                              else { color = "#64748b"; bg = "rgba(100,116,139,0.1)"; label = "OK" }
+                              return (
+                                <Badge variant="outline" className="text-[10px] inline-flex items-center gap-1" style={{ background: bg, color, borderColor: "transparent" }}>
+                                  <ShieldAlert className="size-3" />
+                                  {label}
+                                </Badge>
+                              )
+                            })()}
+                          </td>
+                          <td className="px-6 py-3">
+                            {(() => {
+                              const ms = d.avgResponseMs
+                              if (ms == null) return <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>—</span>
+                              let color = "#10b981"
+                              let bg = "rgba(16,185,129,0.1)"
+                              if (ms > 2000) { color = "#ef4444"; bg = "rgba(239,68,68,0.1)" }
+                              else if (ms >= 500) { color = "#f59e0b"; bg = "rgba(245,158,11,0.1)" }
+                              const label = ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`
+                              return (
+                                <Badge variant="outline" className="text-[10px] inline-flex items-center gap-1" style={{ background: bg, color, borderColor: "transparent" }}>
+                                  <Zap className="size-3" />
+                                  {label}
+                                </Badge>
+                              )
+                            })()}
+                          </td>
+                          <td className="px-6 py-3">
+                            {(() => {
+                              const label = reasonLabel(d.errorReason)
+                              if (!label) return <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>—</span>
+                              return (
+                                <Badge variant="outline" className="text-[10px]" style={{ background: "rgba(239,68,68,0.08)", color: "#dc2626", borderColor: "transparent" }}>
+                                  {label}
+                                </Badge>
+                              )
+                            })()}
+                          </td>
                           <td className="px-6 py-3 text-xs">
                             {d.lastChecked ? (() => {
                               const ageMs = Date.now() - new Date(d.lastChecked).getTime()
@@ -679,7 +919,7 @@ export default function HealthCheckPage() {
 
                         {isOpen && (
                           <tr style={{ background: "var(--muted)" }}>
-                            <td colSpan={5} className="p-0">
+                            <td colSpan={8} className="p-0">
                               <div className="p-4">
                                 <div
                                   className="rounded-lg border p-4"
@@ -747,7 +987,7 @@ export default function HealthCheckPage() {
                   })}
                   {paginatedDead.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-sm" style={{ color: "var(--muted-foreground)" }}>
+                      <td colSpan={8} className="px-6 py-8 text-center text-sm" style={{ color: "var(--muted-foreground)" }}>
                         Tidak ada domain mati yang cocok dengan filter.
                       </td>
                     </tr>

@@ -58,6 +58,11 @@ model Domain {
   isAdult         Boolean  @default(false)
   adultDetectedAt DateTime?
   strategy        String   @default("whitehat")  // whitehat | greyhat | blackhat
+  firstFailureAt  DateTime?              // when current failure streak started; null = healthy
+  sslExpiresAt    DateTime?              // last-checked SSL cert NotAfter
+  sslDaysLeft     Int       @default(-1) // computed days until expiry; -1 = unchecked, 0 = expired
+  avgResponseMs   Int       @default(0)  // rolling avg ms-to-first-byte from last 10 checks
+  lastWafBlock    DateTime?              // last time we got a 403-with-cf-ray signature
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -72,6 +77,7 @@ model Domain {
   nicheMapping    NicheMapping?
   rankKeywords    RankKeyword[]
   indexNowLogs    IndexNowLog[]
+  healthLogs      DomainHealthLog[]
 
   @@schema("pbn")
 }
@@ -669,5 +675,25 @@ model IndexNowLog {
 
   @@index([domainId, submittedAt])
   @@index([batchId])
+  @@schema("pbn")
+}
+
+// DomainHealthLog — per-check persistence for health trending. One row per
+// uptime/SSL probe. Used to compute rolling response-time averages, surface
+// failure streaks, and graph SSL-expiry/WAF-block trends in the dashboard.
+model DomainHealthLog {
+  id           String   @id @default(cuid())
+  domainId     String
+  checkedAt    DateTime @default(now())
+  isAlive      Boolean  @default(false)
+  httpStatus   Int      @default(0)
+  responseMs   Int      @default(0)
+  wpVersion    String   @default("")
+  sslDaysLeft  Int      @default(-1)
+  errorReason  String   @default("")
+  errorMessage String   @default("")
+  domain       Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  @@index([domainId, checkedAt])
+  @@index([checkedAt])
   @@schema("pbn")
 }
