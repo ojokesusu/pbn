@@ -196,12 +196,13 @@ model Backlink {
 }
 
 model BacklinkPlacement {
-  id            String   @id @default(cuid())
-  backlinkId    String
-  articleId     String
-  domainId      String
-  usedAnchor    String   @default("")
-  createdAt     DateTime @default(now())
+  id             String   @id @default(cuid())
+  backlinkId     String
+  articleId      String
+  domainId       String
+  usedAnchor     String   @default("")
+  anchorCategory String?
+  createdAt      DateTime @default(now())
 
   backlink      Backlink @relation(fields: [backlinkId], references: [id], onDelete: Cascade)
   article       Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)

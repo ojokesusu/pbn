@@ -120,13 +120,13 @@ export async function GET() {
       domainCountByStrategy.set(row.strategy, row._count._all);
     }
 
-    // Today's placements joined to domain.strategy + backlink.anchorText
-    // for best-effort anchor-mix categorization.
+    // Today's placements with domain.strategy + the persisted anchorCategory
+    // chosen by the distributor at insert time. NULL category = legacy row
+    // (placed before Phase 5a migration) — skipped from the per-strategy mix.
     const todayPlacementsWithStrategy = await prisma.backlinkPlacement.findMany({
       where: { createdAt: { gte: todayStart } },
       select: {
-        usedAnchor: true,
-        backlink: { select: { anchorText: true } },
+        anchorCategory: true,
         article: { select: { domain: { select: { strategy: true } } } },
       },
     });
@@ -134,15 +134,16 @@ export async function GET() {
     type StrategyName = "whitehat" | "greyhat" | "blackhat";
     const strategies: StrategyName[] = ["whitehat", "greyhat", "blackhat"];
 
-    type AnchorMix = { exact: number; brand: number; partial: number; extracted: number };
+    type AnchorCategory = "exact" | "brand" | "partial" | "extracted";
+    type AnchorMix = Record<AnchorCategory, number>;
+    const VALID_CATEGORIES: ReadonlySet<AnchorCategory> = new Set([
+      "exact",
+      "brand",
+      "partial",
+      "extracted",
+    ]);
     const emptyMix = (): AnchorMix => ({ exact: 0, brand: 0, partial: 0, extracted: 0 });
 
-    // TODO(anchor-category): distributor does not yet persist the anchor
-    // category it chose (exact / brand / partial / extracted). For now we
-    // best-effort classify: if usedAnchor matches backlink.anchorText exactly
-    // → "exact", if no usedAnchor was stored → "extracted" (auto-pulled from
-    // article body), otherwise we bucket as "partial". "brand" stays 0 until
-    // the distributor writes the chosen category alongside each placement.
     const strategyAgg = new Map<string, { placedToday: number; mix: AnchorMix }>();
     for (const s of strategies) strategyAgg.set(s, { placedToday: 0, mix: emptyMix() });
 
@@ -151,11 +152,8 @@ export async function GET() {
       if (!strat || !strategyAgg.has(strat)) continue;
       const slot = strategyAgg.get(strat)!;
       slot.placedToday += 1;
-      const used = (p.usedAnchor || "").trim();
-      const anchor = (p.backlink?.anchorText || "").trim();
-      if (!used) slot.mix.extracted += 1;
-      else if (anchor && used.toLowerCase() === anchor.toLowerCase()) slot.mix.exact += 1;
-      else slot.mix.partial += 1;
+      const cat = p.anchorCategory as AnchorCategory | null;
+      if (cat && VALID_CATEGORIES.has(cat)) slot.mix[cat] += 1;
     }
 
     const strategyStats = strategies.map((s) => ({

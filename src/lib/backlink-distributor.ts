@@ -483,6 +483,7 @@ export async function distributeBacklinks(): Promise<DistributeResult> {
           articleId: article.id,
           domainId,
           usedAnchor: anchorText,
+          anchorCategory,
         },
       });
 
