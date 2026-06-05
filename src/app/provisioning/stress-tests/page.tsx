@@ -6,6 +6,7 @@ import { SidebarInset } from "@/components/ui/sidebar";
 import { AppHeader } from "@/components/layout/app-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { UrlLink } from "@/components/ui/url-link";
 
 type StressTest = {
   id: string;
@@ -264,8 +265,8 @@ export default function StressTestsListPage() {
                             <div className="font-medium truncate max-w-[180px]">
                               {t.server?.label ?? "-"}
                             </div>
-                            <div className="text-[10px] text-muted-foreground font-mono truncate max-w-[180px]">
-                              {t.server?.host ?? "-"}
+                            <div className="text-[10px] text-muted-foreground truncate max-w-[180px]">
+                              {t.server?.host ? <UrlLink href={t.server.host} truncate={30} /> : "-"}
                             </div>
                           </td>
                           <td className="py-2 px-2 tabular-nums">

@@ -48,6 +48,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
+import { UrlLink } from "@/components/ui/url-link"
 
 interface Domain {
   id: string
@@ -670,16 +671,13 @@ export default function DomainsPage() {
                               />
                             )}
                           </div>
-                          <a
+                          <UrlLink
                             href={domain.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs hover:underline truncate max-w-full"
-                            style={{ color: "var(--muted-foreground)" }}
+                            truncate={50}
+                            className="text-xs truncate max-w-full"
                           >
                             <span className="truncate">{domain.url.replace(/^https?:\/\//, "")}</span>
-                            <ExternalLink className="size-3 shrink-0" />
-                          </a>
+                          </UrlLink>
                         </div>
                         <div className="flex shrink-0 gap-0.5">
                           <Button
@@ -831,22 +829,19 @@ export default function DomainsPage() {
                           </div>
                         </TableCell>
                         <TableCell className="py-4">
-                          <a
-                            href={domain.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 hover:underline"
-                            style={{ color: "var(--muted-foreground)" }}
-                          >
+                          <UrlLink href={domain.url} truncate={40}>
                             {domain.url.replace(/^https?:\/\//, "")}
-                            <ExternalLink className="size-3" />
-                          </a>
+                          </UrlLink>
                         </TableCell>
                         <TableCell className="py-4">
                           {domain.server ? (
                             <div>
                               <span className="text-xs font-mono" style={{ color: "var(--secondary-foreground)" }}>{domain.server.label || "—"}</span>
-                              <span className="text-[10px] block font-mono" style={{ color: "var(--muted-foreground)" }}>{domain.server.host}</span>
+                              {domain.server.host ? (
+                                <UrlLink href={domain.server.host} className="text-[10px] block">{domain.server.host}</UrlLink>
+                              ) : (
+                                <span className="text-[10px] block font-mono" style={{ color: "var(--muted-foreground)" }}>—</span>
+                              )}
                             </div>
                           ) : (
                             <span style={{ color: "var(--muted-foreground)" }}>—</span>

@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { AppHeader } from "@/components/layout/app-header";
+import { UrlLink } from "@/components/ui/url-link";
 import {
   ListOrdered,
   Calendar,
@@ -393,7 +394,7 @@ export default function ProvisioningQueuePage() {
                         )}
                       </TableCell>
                       <TableCell className="max-w-xs truncate text-xs text-muted-foreground">
-                        {item.domain?.url ?? "—"}
+                        {item.domain?.url ? <UrlLink href={item.domain.url} truncate={50} /> : "—"}
                       </TableCell>
                       <TableCell className="text-xs">
                         {item.server?.label ?? (

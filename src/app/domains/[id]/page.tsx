@@ -55,6 +55,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { UrlLink } from "@/components/ui/url-link"
 
 interface Article {
   id: string
@@ -721,24 +722,36 @@ export default function DomainDetailPage() {
                         <dt className="text-sm text-muted-foreground">
                           Host
                         </dt>
-                        <dd className="mt-1 font-mono text-sm">
-                          {domain.server?.host ?? "Belum ditetapkan"}
+                        <dd className="mt-1 text-sm">
+                          {domain.server?.host ? (
+                            <UrlLink href={domain.server.host} />
+                          ) : (
+                            <span className="font-mono">Belum ditetapkan</span>
+                          )}
                         </dd>
                       </div>
                       <div>
                         <dt className="text-sm text-muted-foreground">
                           Nameserver 1
                         </dt>
-                        <dd className="mt-1 font-mono text-sm">
-                          {domain.server?.name ?? "—"}
+                        <dd className="mt-1 text-sm">
+                          {domain.server?.name ? (
+                            <UrlLink href={domain.server.name} />
+                          ) : (
+                            <span className="font-mono">—</span>
+                          )}
                         </dd>
                       </div>
                       <div>
                         <dt className="text-sm text-muted-foreground">
                           Nameserver 2
                         </dt>
-                        <dd className="mt-1 font-mono text-sm">
-                          {(domain.server as { nameserver2?: string })?.nameserver2 ?? "—"}
+                        <dd className="mt-1 text-sm">
+                          {(domain.server as { nameserver2?: string })?.nameserver2 ? (
+                            <UrlLink href={(domain.server as { nameserver2?: string })!.nameserver2!} />
+                          ) : (
+                            <span className="font-mono">—</span>
+                          )}
                         </dd>
                       </div>
                     </dl>

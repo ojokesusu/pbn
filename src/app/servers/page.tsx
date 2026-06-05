@@ -50,6 +50,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
+import { UrlLink } from "@/components/ui/url-link"
 
 interface Server {
   id: string
@@ -395,9 +396,9 @@ export default function ServersPage() {
                       </div>
 
                       {/* Row 2: nameservers */}
-                      <div className="mt-2 font-mono text-[11px]" style={{ color: "var(--muted-foreground)" }}>
-                        <div className="truncate">{server.name || "—"}</div>
-                        {server.nameserver2 && <div className="truncate">{server.nameserver2}</div>}
+                      <div className="mt-2 text-[11px]" style={{ color: "var(--muted-foreground)" }}>
+                        <div className="truncate">{server.name ? <UrlLink href={server.name} /> : "—"}</div>
+                        {server.nameserver2 && <div className="truncate"><UrlLink href={server.nameserver2} /></div>}
                       </div>
 
                       {/* Row 3: domain count */}
@@ -438,9 +439,9 @@ export default function ServersPage() {
                           </Link>
                         </TableCell>
                         <TableCell className="py-4">
-                          <div className="font-mono text-xs" style={{ color: "var(--muted-foreground)" }}>
-                            <div>{server.name || "—"}</div>
-                            {server.nameserver2 && <div>{server.nameserver2}</div>}
+                          <div className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                            <div>{server.name ? <UrlLink href={server.name} /> : "—"}</div>
+                            {server.nameserver2 && <div><UrlLink href={server.nameserver2} /></div>}
                           </div>
                         </TableCell>
                         <TableCell className="text-center py-4" style={{ color: "var(--secondary-foreground)" }}>
@@ -634,7 +635,7 @@ export default function ServersPage() {
                         <tbody>
                           {syncReport.details.filter(d => d.changed || d.zoneStatus === "not-in-cloudflare").slice(0, 100).map((d, i) => (
                             <tr key={i} className="border-t" style={{ borderColor: "var(--border)" }}>
-                              <td className="px-3 py-1.5 font-mono text-[10px]" style={{ color: "var(--foreground)" }}>{d.domain}</td>
+                              <td className="px-3 py-1.5 text-[10px]" style={{ color: "var(--foreground)" }}>{d.domain ? <UrlLink href={d.domain} truncate={40} /> : "—"}</td>
                               <td className="px-3 py-1.5">
                                 {d.zoneStatus === "active" ? (
                                   <span className="inline-flex items-center gap-1 text-[10px]" style={{ color: "#10b981" }}>
@@ -648,8 +649,8 @@ export default function ServersPage() {
                                   <span className="text-[10px]" style={{ color: "#f59e0b" }}>{d.zoneStatus}</span>
                                 )}
                               </td>
-                              <td className="px-3 py-1.5 font-mono text-[10px] truncate max-w-[160px]" style={{ color: "var(--muted-foreground)" }}>{d.nsBefore}</td>
-                              <td className="px-3 py-1.5 font-mono text-[10px] truncate max-w-[160px]" style={{ color: d.changed ? "#10b981" : "var(--muted-foreground)" }}>{d.nsAfter}</td>
+                              <td className="px-3 py-1.5 text-[10px] truncate max-w-[160px]" style={{ color: "var(--muted-foreground)" }}>{d.nsBefore ? <UrlLink href={d.nsBefore} truncate={28} /> : "—"}</td>
+                              <td className="px-3 py-1.5 text-[10px] truncate max-w-[160px]" style={{ color: d.changed ? "#10b981" : "var(--muted-foreground)" }}>{d.nsAfter ? <UrlLink href={d.nsAfter} truncate={28} /> : "—"}</td>
                             </tr>
                           ))}
                         </tbody>

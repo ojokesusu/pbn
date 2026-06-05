@@ -25,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { UrlLink, isLikelyUrl } from "@/components/ui/url-link";
 
 type NicheMapping = {
   domainId: string;
@@ -321,8 +322,12 @@ export default function NicheMappingPage() {
                           editing[it.domainId] !== (it.niche ?? "");
                         return (
                           <TableRow key={it.domainId}>
-                            <TableCell className="font-medium font-mono text-xs">
-                              {it.domain?.url || it.domain?.name || "(unknown)"}
+                            <TableCell className="font-medium text-xs">
+                              {it.domain?.url && isLikelyUrl(it.domain.url) ? (
+                                <UrlLink href={it.domain.url} truncate={50} />
+                              ) : (
+                                <span className="font-mono">{it.domain?.url || it.domain?.name || "(unknown)"}</span>
+                              )}
                             </TableCell>
                             <TableCell>
                               <Badge className={nicheBadgeStyle(it.niche)}>

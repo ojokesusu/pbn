@@ -6,6 +6,7 @@ import { Plus, Pencil, Trash2, Link2, Upload, Shuffle, Settings2, Search, Chevro
 
 import { SidebarInset } from "@/components/ui/sidebar"
 import { useConfirm } from "@/components/ui/confirm-modal"
+import { UrlLink } from "@/components/ui/url-link"
 import { AppHeader } from "@/components/layout/app-header"
 import { useAdminGuard } from "@/hooks/use-me"
 import { Button } from "@/components/ui/button"
@@ -506,7 +507,9 @@ export default function BacklinksPage() {
                           <TableCell className="font-medium max-w-[200px] truncate py-3" style={{ color: "var(--secondary-foreground)" }}>
                             {bl.anchorText || <span className="flex items-center gap-1"><Badge variant="outline" className="text-[10px]" style={{ background: "rgba(168,85,247,0.1)", color: "#a855f7", borderColor: "transparent" }}>Auto</Badge><span style={{ color: "var(--muted-foreground)" }}>dari artikel</span></span>}
                           </TableCell>
-                          <TableCell className="max-w-[250px] truncate py-3 text-xs" style={{ color: "var(--muted-foreground)" }}>{bl.targetUrl}</TableCell>
+                          <TableCell className="max-w-[250px] truncate py-3" style={{ color: "var(--muted-foreground)" }}>
+                            {bl.targetUrl ? <UrlLink href={bl.targetUrl} truncate={50} /> : "—"}
+                          </TableCell>
                           <TableCell className="py-3">
                             {bl.type ? <Badge variant="outline" className="text-[10px] font-semibold" style={{
                               background: bl.type === "MS" || bl.type === "MS 2" ? "rgba(239,68,68,0.1)" : bl.type === "LP" ? "rgba(14,165,233,0.1)" : bl.type === "CN" ? "rgba(168,85,247,0.1)" : bl.type === "RTP" ? "rgba(245,158,11,0.1)" : "rgba(100,116,139,0.1)",
@@ -734,8 +737,9 @@ export default function BacklinksPage() {
                                         <div className="text-[12px] truncate" style={{ color: "var(--foreground)" }}>
                                           {placement.article?.title || "—"}
                                         </div>
-                                        <div className="text-[10px] truncate" style={{ color: "var(--muted-foreground)" }}>
-                                          → {backlink.targetUrl}
+                                        <div className="text-[10px] truncate flex items-center gap-1" style={{ color: "var(--muted-foreground)" }}>
+                                          <span>→</span>
+                                          {backlink.targetUrl ? <UrlLink href={backlink.targetUrl} truncate={40} /> : <span>—</span>}
                                         </div>
                                       </div>
 

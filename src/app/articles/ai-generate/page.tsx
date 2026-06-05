@@ -31,6 +31,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
+import { UrlLink } from "@/components/ui/url-link"
 
 interface Domain {
   id: string
@@ -538,7 +539,7 @@ export default function AiGeneratePage() {
                         {selectedDomain ? (
                           <span style={{ color: "var(--secondary-foreground)" }}>
                             {selectedDomain.name}
-                            <span className="ml-2 text-xs" style={{ color: "var(--muted-foreground)" }}>{selectedDomain.url}</span>
+                            <span className="ml-2 text-xs" style={{ color: "var(--muted-foreground)" }}><UrlLink href={selectedDomain.url} truncate={50} /></span>
                             {selectedDomain.genre ? <Badge variant="secondary" className="ml-1 text-[10px] border-0" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>{selectedDomain.genre}</Badge> : ""}
                           </span>
                         ) : (
@@ -573,7 +574,7 @@ export default function AiGeneratePage() {
                                 >
                                   <div className="font-medium">{d.name}</div>
                                   <div className="text-xs flex items-center gap-2" style={{ color: "var(--muted-foreground)" }}>
-                                    <span className="truncate">{d.url}</span>
+                                    <span className="truncate"><UrlLink href={d.url} truncate={50} /></span>
                                     {d.genre && <span>· {d.genre}</span>}
                                     <span>· {d._count?.articles ?? 0} artikel</span>
                                   </div>

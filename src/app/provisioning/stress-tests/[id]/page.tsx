@@ -6,6 +6,7 @@ import { SidebarInset } from "@/components/ui/sidebar";
 import { AppHeader } from "@/components/layout/app-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { UrlLink } from "@/components/ui/url-link";
 
 type StressTestDetail = {
   id: string;
@@ -252,8 +253,8 @@ export default function StressTestDetailPage() {
                 </CardTitle>
                 <div className="text-sm text-muted-foreground mt-1">
                   {data.server?.label ?? "-"}{" "}
-                  <span className="font-mono text-xs">
-                    ({data.server?.host ?? "-"})
+                  <span className="text-xs">
+                    ({data.server?.host ? <UrlLink href={data.server.host} /> : "-"})
                   </span>
                 </div>
               </div>

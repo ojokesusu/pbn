@@ -48,6 +48,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { UrlLink } from "@/components/ui/url-link"
 
 interface DomainItem {
   id: string
@@ -317,8 +318,8 @@ export default function ServerDetailPage() {
                   {serverStatus.label}
                 </Badge>
               </div>
-              <p className="text-sm text-muted-foreground font-mono">
-                {server.host}
+              <p className="text-sm text-muted-foreground">
+                {server.host ? <UrlLink href={server.host} /> : "—"}
               </p>
             </div>
           </div>
@@ -352,8 +353,8 @@ export default function ServerDetailPage() {
               <ServerIcon className="size-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <CardTitle className="text-xl font-bold font-mono">
-                {server.host}
+              <CardTitle className="text-xl font-bold">
+                {server.host ? <UrlLink href={server.host} /> : "—"}
               </CardTitle>
               <p className="text-xs text-muted-foreground">Port: {server.port}</p>
             </CardContent>
@@ -589,17 +590,17 @@ export default function ServerDetailPage() {
                       </div>
                       <div>
                         <dt className="text-sm text-muted-foreground">Host / IP</dt>
-                        <dd className="mt-1 font-mono text-sm">
-                          {server.host}
+                        <dd className="mt-1 text-sm">
+                          {server.host ? <UrlLink href={server.host} /> : "—"}
                         </dd>
                       </div>
                       <div>
                         <dt className="text-sm text-muted-foreground">Nameserver 1</dt>
-                        <dd className="mt-1 font-mono text-sm">{server.name || "—"}</dd>
+                        <dd className="mt-1 text-sm">{server.name ? <UrlLink href={server.name} /> : "—"}</dd>
                       </div>
                       <div>
                         <dt className="text-sm text-muted-foreground">Nameserver 2</dt>
-                        <dd className="mt-1 font-mono text-sm">{server.nameserver2 || "—"}</dd>
+                        <dd className="mt-1 text-sm">{server.nameserver2 ? <UrlLink href={server.nameserver2} /> : "—"}</dd>
                       </div>
                       <div>
                         <dt className="text-sm text-muted-foreground">
@@ -708,7 +709,7 @@ export default function ServerDetailPage() {
                               </Link>
                             </TableCell>
                             <TableCell className="text-muted-foreground">
-                              {domain.url}
+                              {domain.url ? <UrlLink href={domain.url} truncate={50} /> : "—"}
                             </TableCell>
                             <TableCell>
                               <Badge

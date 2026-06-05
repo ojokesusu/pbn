@@ -9,6 +9,7 @@ import { AppHeader } from "@/components/layout/app-header"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
+import { UrlLink } from "@/components/ui/url-link"
 
 interface Stats {
   readyDomains: number
@@ -320,7 +321,7 @@ export default function BulkDeployPage() {
                   ) : (
                     <XCircle className="size-4 text-red-500 shrink-0" />
                   )}
-                  <code className="flex-1 truncate" style={{ color: "var(--secondary-foreground)" }}>{r.url}</code>
+                  <span className="flex-1 truncate"><UrlLink href={r.url} truncate={60} /></span>
                   {r.status === "success" ? (
                     <Badge variant="outline" className="text-[10px]" style={{ background: "rgba(16,185,129,0.1)", color: "#10b981", borderColor: "transparent" }}>
                       {r.filesDeployed} files • {(r.durationMs / 1000).toFixed(1)}s
