@@ -370,6 +370,7 @@ export async function initialDomainSetup(
   domainId: string,
   articleCount: number = 5,
   contentModeOverride?: string,
+  imageModeOverride?: "rss_first" | "stock_first",
 ): Promise<{
   success: boolean;
   articlesCreated: number;
@@ -473,6 +474,7 @@ export async function initialDomainSetup(
             rssImageUrl: sourceContext?.imageUrl,
             query: article.title,
             language: "id",
+            imageMode: imageModeOverride,
           });
           if (images?.[0]?.url) {
             featuredImage = images[0].url;
@@ -517,6 +519,7 @@ export async function initialDomainSetup(
 export async function generateSingleArticle(
   domainId: string,
   contentModeOverride?: string,
+  imageModeOverride?: "rss_first" | "stock_first",
 ): Promise<{
   success: boolean;
   title?: string;
@@ -577,6 +580,7 @@ export async function generateSingleArticle(
         rssImageUrl: sourceContext?.imageUrl,
         query: article.title,
         language: "id",
+        imageMode: imageModeOverride,
       });
       if (images?.[0]?.url) {
         featuredImage = images[0].url;
@@ -1002,15 +1006,18 @@ export async function processSchedulerTick(): Promise<{
     // Threaded into initialDomainSetup / generateSingleArticle below so they
     // pick the per-domain mode instead of re-reading the global one.
     const domainContentMode = strategyCfg.contentMode ?? config.contentMode;
-    // TODO (Phase 5): imageMode override. pickImages() takes a ctx object that
-    // doesn't currently accept imageMode; surfacing it here without the picker
-    // change would silently no-op. Deferred until picker.ts grows an imageMode
-    // param. The effective value would be: strategyCfg.imageMode ?? "rss_first".
-    (domain as unknown as { strategy: { key: string; perServerCapDaily: number; articlesPerWeek: number; contentMode: string } }).strategy = {
+    // OVERRIDE: per-domain imageMode wins. picker.ts demotes editorial sources
+    // behind unsplash/pexels when 'stock_first' so blackhat domains render
+    // clean stock photography instead of branded news shots.
+    const rawImageMode = strategyCfg.imageMode ?? "rss_first";
+    const domainImageMode: "rss_first" | "stock_first" =
+      rawImageMode === "stock_first" ? "stock_first" : "rss_first";
+    (domain as unknown as { strategy: { key: string; perServerCapDaily: number; articlesPerWeek: number; contentMode: string; imageMode: string } }).strategy = {
       key: strategyKey,
       perServerCapDaily,
       articlesPerWeek: domainArticlesPerWeek,
       contentMode: domainContentMode,
+      imageMode: domainImageMode,
     };
 
     // Create job record
@@ -1030,12 +1037,12 @@ export async function processSchedulerTick(): Promise<{
 
       if (domain._count.articles === 0) {
         // Initial setup: generate backdated articles
-        const result = await initialDomainSetup(domain.id, config.initialArticles, domainContentMode);
+        const result = await initialDomainSetup(domain.id, config.initialArticles, domainContentMode, domainImageMode);
         articlesCreated = result.articlesCreated;
         if (!result.success) throw new Error(result.message);
       } else {
         // Ongoing: generate 1 new article
-        const result = await generateSingleArticle(domain.id, domainContentMode);
+        const result = await generateSingleArticle(domain.id, domainContentMode, domainImageMode);
         articlesCreated = result.success ? 1 : 0;
         if (!result.success) throw new Error(result.message);
       }

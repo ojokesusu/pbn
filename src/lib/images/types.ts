@@ -9,6 +9,11 @@ export interface ImageContext {
   query?: string;            // article title or topic
   language?: string;         // default 'id'
   rssImageUrl?: string;      // image URL provided directly by the source RSS feed
+  // 'rss_first' (default) walks the niche chain unchanged — editorial sources
+  // (rss_image / og_scrape / wikipedia) win when available.
+  // 'stock_first' demotes editorial sources behind stock providers so a
+  // blackhat domain renders clean stock photos instead of branded news shots.
+  imageMode?: "rss_first" | "stock_first";
 }
 
 export interface ImageResult {

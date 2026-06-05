@@ -53,9 +53,21 @@ const PRIORITY_BY_NICHE: Record<string, string[]> = {
 
 const DEFAULT_CHAIN = ["unsplash", "pexels"];
 
-function chainFor(niche?: string): string[] {
-  if (!niche) return DEFAULT_CHAIN;
-  return PRIORITY_BY_NICHE[niche] ?? DEFAULT_CHAIN;
+// Stock providers — pulled to the front of the chain when imageMode='stock_first'.
+// Editorial sources (rss_image, og_scrape, wikipedia) and AI (pollinations) stay
+// in their original relative order behind the stocks.
+const STOCK_KEYS = new Set(["unsplash", "pexels"]);
+
+function chainFor(niche?: string, imageMode?: string): string[] {
+  const base = niche ? (PRIORITY_BY_NICHE[niche] ?? DEFAULT_CHAIN) : DEFAULT_CHAIN;
+  if (imageMode !== "stock_first") return base;
+  // Stock-first: demote editorial / AI adapters behind stocks. We DON'T drop
+  // them — if Unsplash + Pexels both miss, we still want a fallback rather
+  // than an empty slot.
+  const stocks = base.filter((k) => STOCK_KEYS.has(k));
+  const rest = base.filter((k) => !STOCK_KEYS.has(k));
+  if (stocks.length === 0) return base;
+  return [...stocks, ...rest];
 }
 
 // Try adapters in order, skip the ones in `skipKeys`. Returns the first
@@ -87,7 +99,7 @@ export async function pickImages(
   ctx: ImageContext,
   count: number = 2
 ): Promise<ImageResult[]> {
-  const chain = chainFor(ctx.niche);
+  const chain = chainFor(ctx.niche, ctx.imageMode);
   const results: ImageResult[] = [];
   const usedKeys = new Set<string>();
 
