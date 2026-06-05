@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Pencil, Trash2, Link2, Upload, Shuffle, Settings2, Search, ChevronLeft, ChevronRight, Loader2, CheckCircle2, Target, BarChart3, ExternalLink, FileText, Server } from "lucide-react"
+import { Plus, Pencil, Trash2, Link2, Upload, Shuffle, Settings2, Search, ChevronLeft, ChevronRight, Loader2, CheckCircle2, Target, BarChart3, ExternalLink, FileText, Server, Layers } from "lucide-react"
 
 import { SidebarInset } from "@/components/ui/sidebar"
 import { useConfirm } from "@/components/ui/confirm-modal"
@@ -58,6 +58,15 @@ interface ServerStat {
   cap: number
 }
 
+type StrategyName = "whitehat" | "greyhat" | "blackhat"
+
+interface StrategyStat {
+  strategy: StrategyName
+  domainCount: number
+  placedToday: number
+  anchorMix: { exact: number; brand: number; partial: number; extracted: number }
+}
+
 interface DistroStats {
   config: { maxPerDomain: number; maxPerArticle: number; percentArticles: number; perServerCap?: number }
   stats: {
@@ -68,6 +77,7 @@ interface DistroStats {
   }
   domains: DomainStat[]
   serverStats?: ServerStat[]
+  strategyStats?: StrategyStat[]
 }
 
 export default function BacklinksPage() {
@@ -361,6 +371,119 @@ export default function BacklinksPage() {
             {distributeResult && (
               <p className="text-xs mt-2 font-medium" style={{ color: "#10b981" }}>{distributeResult}</p>
             )}
+          </div>
+        )}
+
+        {/* Strategy Breakdown card */}
+        {!loading && distroStats && (
+          <div className="rounded-xl border p-5 mb-6 shadow-sm" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Layers className="size-4" style={{ color: "#a855f7" }} />
+                <div>
+                  <h3 className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>Strategy Breakdown</h3>
+                  <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                    Distribusi per bucket strategi (whitehat / greyhat / blackhat)
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              {(["whitehat", "greyhat", "blackhat"] as const).map((s) => {
+                const row = distroStats.strategyStats?.find((r) => r.strategy === s)
+                const palette =
+                  s === "whitehat"
+                    ? { fg: "#10b981", bg: "rgba(16,185,129,0.08)", border: "rgba(16,185,129,0.25)", label: "Whitehat" }
+                    : s === "greyhat"
+                    ? { fg: "#f59e0b", bg: "rgba(245,158,11,0.08)", border: "rgba(245,158,11,0.25)", label: "Greyhat" }
+                    : { fg: "#f43f5e", bg: "rgba(244,63,94,0.08)", border: "rgba(244,63,94,0.25)", label: "Blackhat" }
+                const domainCount = row?.domainCount ?? 0
+                const placedToday = row?.placedToday ?? 0
+                const mix = row?.anchorMix ?? { exact: 0, brand: 0, partial: 0, extracted: 0 }
+                const mixTotal = mix.exact + mix.brand + mix.partial + mix.extracted
+                const pct = (n: number) => (mixTotal > 0 ? Math.round((n / mixTotal) * 100) : 0)
+
+                if (domainCount === 0) {
+                  return (
+                    <div
+                      key={s}
+                      className="rounded-xl border p-4"
+                      style={{ background: palette.bg, borderColor: palette.border }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: palette.fg }}>
+                          {palette.label}
+                        </span>
+                      </div>
+                      <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                        Belum ada domain pada bucket ini.
+                      </p>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div
+                    key={s}
+                    className="rounded-xl border p-4"
+                    style={{ background: palette.bg, borderColor: palette.border }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: palette.fg }}>
+                        {palette.label}
+                      </span>
+                      <span className="text-[10px] font-medium" style={{ color: "var(--muted-foreground)" }}>
+                        {domainCount} domain
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider mb-0.5" style={{ color: "var(--muted-foreground)" }}>
+                          Domain
+                        </p>
+                        <p className="text-xl font-bold tabular-nums" style={{ color: "var(--foreground)" }}>
+                          {domainCount}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider mb-0.5" style={{ color: "var(--muted-foreground)" }}>
+                          Placed today
+                        </p>
+                        <p className="text-xl font-bold tabular-nums" style={{ color: palette.fg }}>
+                          {placedToday}
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider mb-1.5" style={{ color: "var(--muted-foreground)" }}>
+                        Anchor mix {mixTotal === 0 && "(belum ada data hari ini)"}
+                      </p>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {([
+                          ["Exact", mix.exact],
+                          ["Brand", mix.brand],
+                          ["Partial", mix.partial],
+                          ["Extract", mix.extracted],
+                        ] as const).map(([label, value]) => (
+                          <div
+                            key={label}
+                            className="rounded-md px-1.5 py-1 text-center"
+                            style={{ background: "var(--card)", border: "1px solid var(--border)" }}
+                          >
+                            <p className="text-[9px] uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>
+                              {label}
+                            </p>
+                            <p className="text-xs font-semibold tabular-nums" style={{ color: "var(--secondary-foreground)" }}>
+                              {pct(value)}%
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )}
 

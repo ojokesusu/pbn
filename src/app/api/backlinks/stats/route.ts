@@ -109,6 +109,62 @@ export async function GET() {
       .sort((a, b) => b.placed - a.placed)
       .slice(0, 10);
 
+    // Per-strategy breakdown — domain counts grouped by Domain.strategy
+    const domainsByStrategy = await prisma.domain.groupBy({
+      by: ["strategy"],
+      where: { lastDeployed: { not: null } },
+      _count: { _all: true },
+    });
+    const domainCountByStrategy = new Map<string, number>();
+    for (const row of domainsByStrategy) {
+      domainCountByStrategy.set(row.strategy, row._count._all);
+    }
+
+    // Today's placements joined to domain.strategy + backlink.anchorText
+    // for best-effort anchor-mix categorization.
+    const todayPlacementsWithStrategy = await prisma.backlinkPlacement.findMany({
+      where: { createdAt: { gte: todayStart } },
+      select: {
+        usedAnchor: true,
+        backlink: { select: { anchorText: true } },
+        article: { select: { domain: { select: { strategy: true } } } },
+      },
+    });
+
+    type StrategyName = "whitehat" | "greyhat" | "blackhat";
+    const strategies: StrategyName[] = ["whitehat", "greyhat", "blackhat"];
+
+    type AnchorMix = { exact: number; brand: number; partial: number; extracted: number };
+    const emptyMix = (): AnchorMix => ({ exact: 0, brand: 0, partial: 0, extracted: 0 });
+
+    // TODO(anchor-category): distributor does not yet persist the anchor
+    // category it chose (exact / brand / partial / extracted). For now we
+    // best-effort classify: if usedAnchor matches backlink.anchorText exactly
+    // → "exact", if no usedAnchor was stored → "extracted" (auto-pulled from
+    // article body), otherwise we bucket as "partial". "brand" stays 0 until
+    // the distributor writes the chosen category alongside each placement.
+    const strategyAgg = new Map<string, { placedToday: number; mix: AnchorMix }>();
+    for (const s of strategies) strategyAgg.set(s, { placedToday: 0, mix: emptyMix() });
+
+    for (const p of todayPlacementsWithStrategy) {
+      const strat = p.article?.domain?.strategy as StrategyName | undefined;
+      if (!strat || !strategyAgg.has(strat)) continue;
+      const slot = strategyAgg.get(strat)!;
+      slot.placedToday += 1;
+      const used = (p.usedAnchor || "").trim();
+      const anchor = (p.backlink?.anchorText || "").trim();
+      if (!used) slot.mix.extracted += 1;
+      else if (anchor && used.toLowerCase() === anchor.toLowerCase()) slot.mix.exact += 1;
+      else slot.mix.partial += 1;
+    }
+
+    const strategyStats = strategies.map((s) => ({
+      strategy: s,
+      domainCount: domainCountByStrategy.get(s) ?? 0,
+      placedToday: strategyAgg.get(s)!.placedToday,
+      anchorMix: strategyAgg.get(s)!.mix,
+    }));
+
     return NextResponse.json({
       config: {
         maxPerDomain: config.maxPerDomain,
@@ -130,6 +186,7 @@ export async function GET() {
       },
       domains: domainStats,
       serverStats,
+      strategyStats,
     });
   } catch (error) {
     console.error("Backlink stats error:", error);

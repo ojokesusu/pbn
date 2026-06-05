@@ -902,9 +902,10 @@ export async function processSchedulerTick(): Promise<{
   healthDead: number;
   healthAlive: number;
   errors: string[];
+  perStrategySummary?: Record<string, { articles: number }>;
 }> {
   const config = await getSchedulerConfig();
-  if (!config.isRunning) return { processed: 0, generated: 0, deployed: 0, purged: 0, backlinksPlaced: 0, ranksChecked: 0, healthChecked: 0, healthDead: 0, healthAlive: 0, errors: [] };
+  if (!config.isRunning) return { processed: 0, generated: 0, deployed: 0, purged: 0, backlinksPlaced: 0, ranksChecked: 0, healthChecked: 0, healthDead: 0, healthAlive: 0, errors: [], perStrategySummary: {} };
 
   const now = new Date();
   const errors: string[] = [];
@@ -912,11 +913,37 @@ export async function processSchedulerTick(): Promise<{
   let healthChecked = 0, healthDead = 0, healthAlive = 0;
 
   // Pre-load StrategyConfig rows once for the whole tick — used below to
-  // attach per-domain strategy multipliers before the article-gen loop.
-  // phase 1: surface only; phase 2 will gate placements by it.
-  const strategyRows = await prisma.strategyConfig.findMany();
-  const strategyByKey: Record<string, typeof strategyRows[number]> = {};
+  // attach per-domain strategy multipliers + override articlesPerWeek /
+  // contentMode before the article-gen loop.
+  // Wrapped in try/catch: if the StrategyConfig table is missing (fresh DB,
+  // migration not run, transient DB error) we fall back to whitehat defaults
+  // inline so the tick still produces something instead of throwing.
+  type StrategyRow = {
+    strategy: string;
+    articlesPerWeek: number;
+    perServerCapMult: number;
+    contentMode: string;
+    imageMode: string;
+  };
+  const WHITEHAT_DEFAULT: StrategyRow = {
+    strategy: "whitehat",
+    articlesPerWeek: 3,
+    perServerCapMult: 0.5,
+    contentMode: "hybrid_rss",
+    imageMode: "rss_first",
+  };
+  let strategyRows: StrategyRow[] = [];
+  try {
+    strategyRows = (await prisma.strategyConfig.findMany()) as StrategyRow[];
+  } catch (err) {
+    console.warn(`[scheduler] StrategyConfig preload failed, falling back to whitehat defaults:`, err);
+    strategyRows = [];
+  }
+  const strategyByKey: Record<string, StrategyRow> = {};
   for (const s of strategyRows) strategyByKey[s.strategy] = s;
+  // Per-strategy run summary — keyed by strategy name, accumulated below.
+  // Surfaced in the tick result so monitors can see how each bucket performed.
+  const perStrategySummary: Record<string, { articles: number }> = {};
   // Base per-server cap from BacklinkConfig — read once, multiplied per-domain below.
   const backlinkCfg = await prisma.backlinkConfig.findFirst();
   const baseServerCap = backlinkCfg?.maxPerServerPerDay ?? 6;
@@ -950,15 +977,32 @@ export async function processSchedulerTick(): Promise<{
     // change lives in a follow-up. For now we just stamp them onto the
     // in-memory domain row so downstream code (and logs) can see them.
     const strategyKey = (domain as { strategy?: string }).strategy || "whitehat";
-    const strategyCfg = strategyByKey[strategyKey];
-    const perServerCapDaily = strategyCfg
-      ? Math.max(1, Math.round(baseServerCap * strategyCfg.perServerCapMult))
-      : baseServerCap;
-    const domainArticlesPerWeek = strategyCfg?.articlesPerWeek ?? config.articlesPerWeek;
-    (domain as unknown as { strategy: { key: string; perServerCapDaily: number; articlesPerWeek: number } }).strategy = {
+    // Effective strategy row: DB row → inline whitehat default fallback. The
+    // inline fallback covers two cases: (a) StrategyConfig preload threw and
+    // strategyByKey is empty, (b) a domain's strategy enum value has no DB
+    // row yet (e.g. operator added "greyhat" without seeding the row).
+    const strategyCfg = strategyByKey[strategyKey] ?? WHITEHAT_DEFAULT;
+    const perServerCapDaily = Math.max(1, Math.round(baseServerCap * strategyCfg.perServerCapMult));
+    // OVERRIDE: per-domain articlesPerWeek wins over the global SchedulerConfig
+    // value. This is the cadence input for calculateNextSchedule below.
+    const domainArticlesPerWeek = strategyCfg.articlesPerWeek ?? config.articlesPerWeek;
+    // OVERRIDE: per-domain contentMode wins over the global SchedulerConfig
+    // value. Only applied if the strategy row carries an explicit contentMode
+    // (defensive — WHITEHAT_DEFAULT always does, but a partial DB row might not).
+    // NOTE: not consumed inside this tick — initialDomainSetup / generateSingleArticle
+    // still read the global cfg.contentMode internally. Phase 5 will thread this
+    // override into those helpers; for now we surface it on the domain object so
+    // it's visible to logs and any future per-domain branching.
+    const domainContentMode = strategyCfg.contentMode ?? config.contentMode;
+    // TODO (Phase 5): imageMode override. pickImages() takes a ctx object that
+    // doesn't currently accept imageMode; surfacing it here without the picker
+    // change would silently no-op. Deferred until picker.ts grows an imageMode
+    // param. The effective value would be: strategyCfg.imageMode ?? "rss_first".
+    (domain as unknown as { strategy: { key: string; perServerCapDaily: number; articlesPerWeek: number; contentMode: string } }).strategy = {
       key: strategyKey,
       perServerCapDaily,
       articlesPerWeek: domainArticlesPerWeek,
+      contentMode: domainContentMode,
     };
 
     // Create job record
@@ -988,6 +1032,13 @@ export async function processSchedulerTick(): Promise<{
         if (!result.success) throw new Error(result.message);
       }
       generated += articlesCreated;
+      // Per-strategy roll-up: track how many articles each bucket produced
+      // this tick so the monitor surface can compare whitehat/greyhat/blackhat.
+      if (articlesCreated > 0) {
+        const bucket = perStrategySummary[strategyKey] ?? { articles: 0 };
+        bucket.articles += articlesCreated;
+        perStrategySummary[strategyKey] = bucket;
+      }
 
       // Auto-deploy if enabled
       if (config.autoDeploy && domain.server) {
@@ -1144,7 +1195,7 @@ export async function processSchedulerTick(): Promise<{
     // Non-critical
   }
 
-  return { processed, generated, deployed, purged, backlinksPlaced, ranksChecked, healthChecked, healthDead, healthAlive, errors };
+  return { processed, generated, deployed, purged, backlinksPlaced, ranksChecked, healthChecked, healthDead, healthAlive, errors, perStrategySummary };
 }
 
 // Activate domains in the scheduler

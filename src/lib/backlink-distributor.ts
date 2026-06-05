@@ -119,7 +119,118 @@ export type DistributeResult = {
   details: Array<{ articleTitle: string; domain: string; anchor: string; url: string; type: string }>;
   message: string;
   perServerStats?: Record<string, { placed: number; cap: number }>;
+  perStrategy?: Record<
+    string,
+    {
+      attempted: number;
+      placed: number;
+      anchorMix: { exact: number; brand: number; partial: number; extracted: number };
+    }
+  >;
 };
+
+// Strategy bucket defaults — fallback when StrategyConfig row missing.
+// Matches Phase 1 migration seed for whitehat.
+const STRATEGY_DEFAULTS = {
+  backlinkPerArticleMax: 1,
+  anchorExactPct: 10,
+  perServerCapMult: 0.5,
+};
+
+type StrategyRow = {
+  strategy: string;
+  backlinkPerArticleMax: number;
+  anchorExactPct: number;
+  perServerCapMult: number;
+};
+
+type AnchorCategory = "exact" | "brand" | "partial" | "extracted";
+
+// Build ordered anchor candidate list (rule #5 strategy-weighted).
+// Returns [{ category, text }] in priority order. Walk this list, take first
+// candidate that passes the natural-anchor placement check.
+function buildAnchorCandidates(
+  strategy: StrategyRow | undefined,
+  backlink: { anchorText?: string | null; targetUrl: string },
+  articleContent: string
+): Array<{ category: AnchorCategory; text: string }> {
+  const out: Array<{ category: AnchorCategory; text: string }> = [];
+
+  const explicitAnchor = (backlink.anchorText || "").trim();
+
+  // exact: full anchorText if it appears naturally
+  const exactCandidates: string[] = [];
+  if (explicitAnchor) {
+    const escaped = explicitAnchor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`\\b${escaped}\\b`, "i").test(articleContent)) {
+      exactCandidates.push(explicitAnchor);
+    }
+  }
+
+  // brand: extract from URL hostname, strip TLD + dashes
+  const brandCandidates: string[] = [];
+  try {
+    const u = new URL(backlink.targetUrl);
+    const host = u.hostname.replace(/^www\./i, "");
+    const parts = host.split(".");
+    // Drop TLD (last part); if it's a 2-level like co.id strip both
+    const knownTwoLevel = ["co.id", "co.uk", "com.au", "or.id", "ac.id"];
+    let labels = parts.slice(0, -1);
+    if (parts.length >= 3 && knownTwoLevel.includes(parts.slice(-2).join("."))) {
+      labels = parts.slice(0, -2);
+    }
+    const brand = labels.join(" ").replace(/-/g, " ").trim();
+    if (brand.length >= 3) brandCandidates.push(brand);
+  } catch {
+    // ignore malformed URL
+  }
+
+  // partial: random 1-2 word window from anchorText
+  const partialCandidates: string[] = [];
+  if (explicitAnchor) {
+    const words = explicitAnchor.split(/\s+/).filter((w) => w.length >= 3);
+    if (words.length >= 1) {
+      // single-word window
+      const i = Math.floor(Math.random() * words.length);
+      partialCandidates.push(words[i]);
+      // two-word window if possible
+      if (words.length >= 2) {
+        const j = Math.floor(Math.random() * (words.length - 1));
+        partialCandidates.push(`${words[j]} ${words[j + 1]}`);
+      }
+    }
+  }
+
+  // extracted: existing extractor, capped at 20
+  const extractedCandidates = extractCandidateWords(articleContent).slice(0, 20);
+
+  // Strategy-weighted category order.
+  const exactPct = strategy?.anchorExactPct ?? STRATEGY_DEFAULTS.anchorExactPct;
+  const roll = Math.random() * 100;
+  let order: AnchorCategory[];
+  if (roll < exactPct) {
+    order = ["exact", "brand", "partial", "extracted"];
+  } else if (roll < exactPct + (100 - exactPct) * 0.7) {
+    order = ["brand", "partial", "extracted", "exact"];
+  } else {
+    order = ["partial", "brand", "extracted", "exact"];
+  }
+
+  const buckets: Record<AnchorCategory, string[]> = {
+    exact: exactCandidates,
+    brand: brandCandidates,
+    partial: partialCandidates,
+    extracted: extractedCandidates,
+  };
+
+  for (const cat of order) {
+    for (const text of buckets[cat]) {
+      out.push({ category: cat, text });
+    }
+  }
+
+  return out;
+}
 
 export async function distributeBacklinks(): Promise<DistributeResult> {
   // Config
@@ -173,6 +284,21 @@ export async function distributeBacklinks(): Promise<DistributeResult> {
       message: `Batas harian tercapai (${dailyLimit}/hari). Coba lagi besok.`,
     };
   }
+
+  // Preload StrategyConfig rows. Single query; map by strategy name.
+  // Fallback: if a row is missing for a domain's strategy, use STRATEGY_DEFAULTS.
+  const strategies = await prisma.strategyConfig.findMany();
+  const byStrategy = new Map<string, StrategyRow>(
+    strategies.map((s) => [
+      s.strategy,
+      {
+        strategy: s.strategy,
+        backlinkPerArticleMax: s.backlinkPerArticleMax,
+        anchorExactPct: s.anchorExactPct,
+        perServerCapMult: s.perServerCapMult,
+      },
+    ])
+  );
 
   const backlinks = await prisma.backlink.findMany({
     where: { status: "active" },
@@ -240,15 +366,54 @@ export async function distributeBacklinks(): Promise<DistributeResult> {
   let totalPlaced = 0;
   const details: DistributeResult["details"] = [];
 
+  // Per-strategy accounting surfaced in DistributeResult.perStrategy.
+  const perStrategy: Record<
+    string,
+    {
+      attempted: number;
+      placed: number;
+      anchorMix: { exact: number; brand: number; partial: number; extracted: number };
+    }
+  > = {};
+  const ensureStrategyBucket = (name: string) => {
+    if (!perStrategy[name]) {
+      perStrategy[name] = {
+        attempted: 0,
+        placed: 0,
+        anchorMix: { exact: 0, brand: 0, partial: 0, extracted: 0 },
+      };
+    }
+    return perStrategy[name];
+  };
+
   for (const [domainId, domainArticles] of Object.entries(articlesByDomain)) {
     const existingCount = existingPlacementsByDomain[domainId] ?? 0;
     const remainingSlots = config.maxPerDomain - existingCount;
     if (remainingSlots <= 0) continue;
 
+    // Resolve this domain's strategy bucket. Domain.strategy was loaded as
+    // part of the article.domain include above. Fallback to "whitehat" if
+    // null/empty, then to STRATEGY_DEFAULTS if the row is missing.
+    const domainStrategyName =
+      (domainArticles[0]?.domain as unknown as { strategy?: string })?.strategy ||
+      "whitehat";
+    const strategyRow = byStrategy.get(domainStrategyName);
+
+    // Per-article cap — strategy OVERRIDES global config.maxPerArticle.
+    const perArticleCap =
+      strategyRow?.backlinkPerArticleMax ?? config.maxPerArticle;
+
+    // Per-server cap — strategy MULTIPLIES global maxPerServerPerDay.
+    const mult = strategyRow?.perServerCapMult ?? 1;
+    const effectiveServerCap = Number.isFinite(maxPerServerPerDay)
+      ? Math.round(maxPerServerPerDay * mult)
+      : Number.POSITIVE_INFINITY;
+
     // All articles in a domain share the same source server, so we can short-
-    // circuit the entire domain if its server has already hit the daily cap.
+    // circuit the entire domain if its server has already hit the (strategy-
+    // adjusted) daily cap.
     const domainServerId = domainArticles[0]?.domain?.serverId ?? "_unassigned";
-    if ((perServerToday[domainServerId] ?? 0) >= maxPerServerPerDay) continue;
+    if ((perServerToday[domainServerId] ?? 0) >= effectiveServerCap) continue;
 
     const shuffledArticles = [...domainArticles].sort(() => Math.random() - 0.5);
     const targetForDomain = Math.min(
@@ -262,9 +427,9 @@ export async function distributeBacklinks(): Promise<DistributeResult> {
       if (placedInDomain >= targetForDomain) break;
       if (totalPlaced >= targetArticleCount) break;
       if (totalPlaced >= remainingToday) break;
-      if (article.backlinkPlacements.length >= config.maxPerArticle) continue;
+      if (article.backlinkPlacements.length >= perArticleCap) continue;
       const articleServerId = article.domain?.serverId ?? "_unassigned";
-      if ((perServerToday[articleServerId] ?? 0) >= maxPerServerPerDay) break;
+      if ((perServerToday[articleServerId] ?? 0) >= effectiveServerCap) break;
 
       const existingBacklinkIds = new Set(article.backlinkPlacements.map((p) => p.backlinkId));
       const availableBacklink = sortedBacklinks.find((bl) => {
@@ -274,30 +439,31 @@ export async function distributeBacklinks(): Promise<DistributeResult> {
       });
       if (!availableBacklink) continue;
 
-      // Build candidate list (rule #5): explicit anchor only if it appears
-      // naturally in the body, then fall back to random words/phrases
-      // extracted from the article itself.
-      const candidates: string[] = [];
-      const explicitAnchor = (availableBacklink.anchorText || "").trim();
-      if (explicitAnchor) {
-        const escaped = explicitAnchor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        if (new RegExp(`\\b${escaped}\\b`, "i").test(article.content)) {
-          candidates.push(explicitAnchor);
-        }
-      }
-      candidates.push(...extractCandidateWords(article.content).slice(0, 20));
+      // Count attempt against the strategy bucket.
+      const bucket = ensureStrategyBucket(domainStrategyName);
+      bucket.attempted++;
+
+      // Strategy-weighted anchor mix (rule #5). Walk ordered candidates,
+      // accept first one that passes the natural-anchor placement check.
+      const candidates = buildAnchorCandidates(
+        strategyRow,
+        availableBacklink,
+        article.content
+      );
 
       let newContent: string | null = null;
       let anchorText = "";
+      let anchorCategory: AnchorCategory | null = null;
       for (const candidate of candidates) {
         const attempt = insertBacklinkIntoContent(
           article.content,
-          candidate,
+          candidate.text,
           availableBacklink.targetUrl
         );
         if (attempt) {
           newContent = attempt;
-          anchorText = candidate;
+          anchorText = candidate.text;
+          anchorCategory = candidate.category;
           break;
         }
       }
@@ -331,6 +497,10 @@ export async function distributeBacklinks(): Promise<DistributeResult> {
       placedInDomain++;
       totalPlaced++;
       perServerToday[articleServerId] = (perServerToday[articleServerId] ?? 0) + 1;
+
+      // Strategy bucket — placement + anchorMix accounting.
+      bucket.placed++;
+      if (anchorCategory) bucket.anchorMix[anchorCategory]++;
     }
   }
 
@@ -354,5 +524,6 @@ export async function distributeBacklinks(): Promise<DistributeResult> {
     details,
     message: `Berhasil menyisipkan ${totalPlaced} backlink ke artikel`,
     perServerStats,
+    perStrategy,
   };
 }
