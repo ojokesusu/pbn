@@ -336,7 +336,7 @@ export async function POST(request: NextRequest) {
       responseMs: number;
       errorReason: ErrorReason;
       sslDaysLeft: number;
-      wpVersion: string | null;
+      wpVersion?: string;
     }> = [];
 
     // ---- Promise pool, concurrency=16 -------------------------------------
@@ -402,7 +402,7 @@ export async function POST(request: NextRequest) {
         responseMs: check.responseMs,
         errorReason: check.errorReason,
         sslDaysLeft: check.sslDaysLeft,
-        wpVersion: check.wpVersion,
+        wpVersion: check.wpVersion ?? undefined,
       });
 
       return {
@@ -415,7 +415,6 @@ export async function POST(request: NextRequest) {
     // ---- Bulk insert health logs ONCE at end of batch ---------------------
     if (healthLogs.length > 0) {
       try {
-        // @ts-expect-error — model may or may not exist depending on schema state
         await prisma.domainHealthLog.createMany({
           data: healthLogs,
           skipDuplicates: true,
