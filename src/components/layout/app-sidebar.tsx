@@ -68,6 +68,7 @@ type SidebarStats = {
   adultDomains?: number
   iGamingDomains?: number
   rankKeywordsActive?: number
+  indexNowUsedToday?: number
 }
 
 type BadgeTone = "teal" | "lime" | "red" | "amber" | "purple" | "pink" | "muted"
@@ -278,6 +279,22 @@ const MENU_GROUPS: NavGroup[] = [
       },
       { title: "Google Ping", href: "/google-ping", icon: Search, tourId: "nav-ping" },
       {
+        title: "Ping Status",
+        href: "/google-ping/status",
+        icon: Activity,
+        tourId: "nav-ping-status",
+        // IndexNow daily-cap usage. Amber when we cross 80% of the 10k cap
+        // so the operator notices before the API hard-fails. Hidden when
+        // zero so the row stays clean on idle days.
+        badge: (s) =>
+          s?.indexNowUsedToday && s.indexNowUsedToday > 0
+            ? fmtCount(s.indexNowUsedToday)
+            : null,
+        badgeTone: (s) =>
+          s && (s.indexNowUsedToday ?? 0) > 8000 ? "amber" : "teal",
+        adminOnly: true,
+      },
+      {
         title: "Activity Log",
         href: "/activity-log",
         icon: Activity,
@@ -360,18 +377,25 @@ export function AppSidebar() {
       {/* ── Logo ── */}
       <SidebarHeader className="h-14 items-center justify-center border-b border-[color:var(--border)]">
         <Link href="/" className="group/logo flex items-center gap-2 px-1">
-          {/* Light-mode logo — hidden in dark via class:dark:hidden */}
-          <img
-            src="/pbn-logo-light.png"
-            alt="PBN ROKET"
-            className="block dark:hidden h-9 w-auto transition-transform duration-300 group-hover/logo:scale-105"
-          />
-          {/* Dark-mode logo — shown only in dark */}
+          {/* Logo mapping was swapped in the first pass — Sandi's source
+              files use "dark-mode" / "light-mode" to name the asset by the
+              theme it's MEANT TO APPEAR IN, not by the asset's own color:
+                pbn-logo-dark.png  = dark-colored logo for LIGHT theme
+                pbn-logo-light.png = light-colored logo for DARK theme
+              Visually confirmed by Sandi on 2026-06-05. */}
           <img
             src="/pbn-logo-dark.png"
             alt="PBN ROKET"
+            className="block dark:hidden h-9 w-auto transition-transform duration-300 group-hover/logo:scale-105"
+          />
+          <img
+            src="/pbn-logo-light.png"
+            alt="PBN ROKET"
             className="hidden dark:block h-9 w-auto transition-transform duration-300 group-hover/logo:scale-105"
           />
+          <span className="truncate text-sm font-bold tracking-tight text-[color:var(--secondary-foreground)]">
+            PBN ROKET
+          </span>
         </Link>
       </SidebarHeader>
 

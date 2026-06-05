@@ -21,8 +21,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "PBN ROKET",
   description: "Dasbor Manajemen Jaringan Blog Privat",
+  // Next.js App Router auto-discovers src/app/icon.png + apple-icon.png and
+  // injects the correct <link> tags + cache-busting hashes. Keeping the
+  // explicit metadata.icons here only for the legacy /favicon.png fallback
+  // (older browsers that still look for /favicon.ico at site root).
   icons: {
-    icon: "/favicon.png",
+    icon: [
+      { url: "/favicon.png", type: "image/png", sizes: "any" },
+    ],
     shortcut: "/favicon.png",
     apple: "/favicon.png",
   },
