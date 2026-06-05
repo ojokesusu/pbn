@@ -366,7 +366,11 @@ function calculateNextSchedule(articlesPerWeek: number, timeStart: number, timeE
 }
 
 // Initial setup for a brand new domain: create theme + categories + backdated articles
-export async function initialDomainSetup(domainId: string, articleCount: number = 5): Promise<{
+export async function initialDomainSetup(
+  domainId: string,
+  articleCount: number = 5,
+  contentModeOverride?: string,
+): Promise<{
   success: boolean;
   articlesCreated: number;
   message: string;
@@ -383,9 +387,11 @@ export async function initialDomainSetup(domainId: string, articleCount: number 
 
   const genre = domain.genre || "Berita";
 
-  // Read scheduler config once — used to decide hybrid vs pure_ai per article
+  // Per-domain strategy.contentMode wins over the global scheduler config so
+  // a blackhat domain can run pure_ai even when global default is hybrid_rss.
   const cfg = await getSchedulerConfig();
-  const hybridMode = cfg.contentMode === "hybrid_rss";
+  const effectiveContentMode = contentModeOverride ?? cfg.contentMode;
+  const hybridMode = effectiveContentMode === "hybrid_rss";
   const hybridLimit = cfg.hybridSourceLimit ?? 3;
 
   try {
@@ -508,7 +514,10 @@ export async function initialDomainSetup(domainId: string, articleCount: number 
 }
 
 // Generate a single new article for a domain (ongoing content)
-export async function generateSingleArticle(domainId: string): Promise<{
+export async function generateSingleArticle(
+  domainId: string,
+  contentModeOverride?: string,
+): Promise<{
   success: boolean;
   title?: string;
   message: string;
@@ -530,10 +539,11 @@ export async function generateSingleArticle(domainId: string): Promise<{
   const existingTitles = domain.articles.map(a => a.title);
 
   try {
-    // HYBRID mode: fetch RSS source for rewrite. PURE_AI (default): no source.
+    // Per-domain strategy.contentMode wins over the global scheduler config.
     const cfg = await getSchedulerConfig();
+    const effectiveContentMode = contentModeOverride ?? cfg.contentMode;
     let sourceContext: HybridContextWithImage | undefined;
-    if (cfg.contentMode === "hybrid_rss") {
+    if (effectiveContentMode === "hybrid_rss") {
       const ctx = await buildHybridContext(
         { id: domain.id, genre: domain.genre, nicheMapping: domain.nicheMapping },
         cfg.hybridSourceLimit ?? 3,
@@ -989,10 +999,8 @@ export async function processSchedulerTick(): Promise<{
     // OVERRIDE: per-domain contentMode wins over the global SchedulerConfig
     // value. Only applied if the strategy row carries an explicit contentMode
     // (defensive — WHITEHAT_DEFAULT always does, but a partial DB row might not).
-    // NOTE: not consumed inside this tick — initialDomainSetup / generateSingleArticle
-    // still read the global cfg.contentMode internally. Phase 5 will thread this
-    // override into those helpers; for now we surface it on the domain object so
-    // it's visible to logs and any future per-domain branching.
+    // Threaded into initialDomainSetup / generateSingleArticle below so they
+    // pick the per-domain mode instead of re-reading the global one.
     const domainContentMode = strategyCfg.contentMode ?? config.contentMode;
     // TODO (Phase 5): imageMode override. pickImages() takes a ctx object that
     // doesn't currently accept imageMode; surfacing it here without the picker
@@ -1022,12 +1030,12 @@ export async function processSchedulerTick(): Promise<{
 
       if (domain._count.articles === 0) {
         // Initial setup: generate backdated articles
-        const result = await initialDomainSetup(domain.id, config.initialArticles);
+        const result = await initialDomainSetup(domain.id, config.initialArticles, domainContentMode);
         articlesCreated = result.articlesCreated;
         if (!result.success) throw new Error(result.message);
       } else {
         // Ongoing: generate 1 new article
-        const result = await generateSingleArticle(domain.id);
+        const result = await generateSingleArticle(domain.id, domainContentMode);
         articlesCreated = result.success ? 1 : 0;
         if (!result.success) throw new Error(result.message);
       }
