@@ -17,6 +17,7 @@ export async function GET() {
       domainsWithoutSchedule,
       adultDomains,
       iGamingDomains,
+      rankKeywordsActive,
     ] = await Promise.all([
       prisma.domain.count(),
       prisma.article.count(),
@@ -58,6 +59,8 @@ export async function GET() {
       // iGaming-pinned domains — drives the purple sidebar badge on
       // /domains/igaming. Source-of-truth is NicheMapping.niche, not Domain.
       prisma.nicheMapping.count({ where: { niche: "igaming" } }),
+      // Active rank-tracker keywords — drives the SEO sidebar badge.
+      prisma.rankKeyword.count({ where: { active: true } }),
     ]);
 
     return NextResponse.json({
@@ -82,6 +85,7 @@ export async function GET() {
       domainsWithoutSchedule,
       adultDomains,
       iGamingDomains,
+      rankKeywordsActive,
     });
   } catch (error) {
     console.error("Failed to fetch stats:", error);

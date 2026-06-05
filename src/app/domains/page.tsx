@@ -47,8 +47,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
 import { UrlLink } from "@/components/ui/url-link"
+
+type Strategy = "whitehat" | "greyhat" | "blackhat"
 
 interface Domain {
   id: string
@@ -66,10 +74,20 @@ interface Domain {
   theme: { id: string; name: string; layoutName: string; isGenerated: boolean } | null
   server: { id: string; label: string; name: string; host: string } | null
   schedulerActive: boolean
+  strategy: Strategy
   _count: { articles: number }
   wpArticles: number
   aiArticles: number
   contentSource: "wordpress" | "ai" | "mixed" | "none"
+}
+
+// Strategy badge palette. Whitehat=safe green, greyhat=warn amber, blackhat=risk rose.
+// Click on the badge opens a dropdown to switch — the visual matches the
+// downstream backlink/anchor aggressiveness so operators can scan at a glance.
+const strategyConfig: Record<Strategy, { label: string; bg: string; color: string }> = {
+  whitehat: { label: "Whitehat", bg: "rgba(16,185,129,0.12)", color: "#10b981" },
+  greyhat: { label: "Greyhat", bg: "rgba(245,158,11,0.12)", color: "#f59e0b" },
+  blackhat: { label: "Blackhat", bg: "rgba(244,63,94,0.12)", color: "#f43f5e" },
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -155,15 +173,25 @@ export default function DomainsPage() {
   const [templateFilter, setTemplateFilter] = useState<TemplateFilter>("")
   const [schedulerFilter, setSchedulerFilter] = useState<SchedulerFilter>("")
 
+  // Strategy filter (client-side — list is already paginated server-side, but
+  // strategy is a small enum so a local filter keeps the UI snappy without
+  // round-tripping). "" = show all.
+  const [strategyFilter, setStrategyFilter] = useState<"" | Strategy>("")
+  // Track which row's strategy update is in-flight so the badge can spin.
+  const [strategyUpdating, setStrategyUpdating] = useState<string | null>(null)
+
   // Bulk selection for scheduler activation
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkActivating, setBulkActivating] = useState(false)
 
   // The visible list IS the current page — server already paginated + filtered.
-  // We keep `paginated` and `filtered` aliases so the existing JSX below stays
-  // unchanged.
-  const filtered = domains
-  const paginated = domains
+  // Strategy filter is applied client-side on top because it's a tab toggle,
+  // not part of the server query. `filtered`/`paginated` are kept as aliases so
+  // the rest of the JSX (bulk select, table loop, etc.) stays unchanged.
+  const filtered = strategyFilter
+    ? domains.filter((d) => d.strategy === strategyFilter)
+    : domains
+  const paginated = filtered
   const totalPages = Math.max(1, Math.ceil(total / perPage))
 
   const hasActiveFilters = deployFilter || healthFilter || genreFilter || contentFilter || templateFilter || schedulerFilter
@@ -246,8 +274,35 @@ export default function DomainsPage() {
     setContentFilter("")
     setTemplateFilter("")
     setSchedulerFilter("")
+    setStrategyFilter("")
     setSearch("")
     setCurrentPage(1)
+  }
+
+  // Optimistically flip the badge so the dropdown feels instant; roll back
+  // on failure. We don't refetch the whole list — just the one row is enough.
+  async function handleStrategyChange(domain: Domain, next: Strategy) {
+    if (domain.strategy === next) return
+    setStrategyUpdating(domain.id)
+    setDomains((prev) =>
+      prev.map((d) => (d.id === domain.id ? { ...d, strategy: next } : d))
+    )
+    try {
+      const res = await fetch(`/api/domains/${domain.id}/strategy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ strategy: next }),
+      })
+      if (!res.ok) throw new Error("Failed to update strategy")
+    } catch (err) {
+      // Roll back the optimistic update so the badge matches the server again.
+      setDomains((prev) =>
+        prev.map((d) => (d.id === domain.id ? { ...d, strategy: domain.strategy } : d))
+      )
+      console.error("Failed to update strategy:", err)
+    } finally {
+      setStrategyUpdating(null)
+    }
   }
 
   function toggleSelect(id: string) {
@@ -513,6 +568,41 @@ export default function DomainsPage() {
           </CardHeader>
           <CardContent>
             {!loading && domains.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {/* Strategy tabs — client-side filter, separate from server-side
+                    filters since the buckets are tiny enums and tab UX is faster. */}
+                {([
+                  { v: "", label: "Semua" },
+                  { v: "whitehat", label: "Whitehat" },
+                  { v: "greyhat", label: "Greyhat" },
+                  { v: "blackhat", label: "Blackhat" },
+                ] as const).map((tab) => {
+                  const isActive = strategyFilter === tab.v
+                  const cfg = tab.v ? strategyConfig[tab.v as Strategy] : null
+                  return (
+                    <button
+                      key={tab.v || "all"}
+                      onClick={() => setStrategyFilter(tab.v as "" | Strategy)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                      style={
+                        isActive
+                          ? {
+                              background: cfg ? cfg.color : "#0ea5e9",
+                              color: "#ffffff",
+                            }
+                          : {
+                              background: cfg ? cfg.bg : "var(--muted)",
+                              color: cfg ? cfg.color : "var(--muted-foreground)",
+                            }
+                      }
+                    >
+                      {tab.label}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            {!loading && domains.length > 0 && (
               <div className="mb-4 flex flex-wrap gap-3 items-center">
                 {/* Search */}
                 <div className="relative flex-1 min-w-[220px]">
@@ -746,6 +836,14 @@ export default function DomainsPage() {
                             {domain.genre}
                           </Badge>
                         )}
+                        {(() => {
+                          const cfg = strategyConfig[domain.strategy] ?? strategyConfig.whitehat
+                          return (
+                            <Badge variant="outline" className="border-0 text-[10px]" style={{ background: cfg.bg, color: cfg.color }}>
+                              {cfg.label}
+                            </Badge>
+                          )
+                        })()}
                       </div>
 
                       {/* Row 3: meta info */}
@@ -789,6 +887,7 @@ export default function DomainsPage() {
                     <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>URL</TableHead>
                     <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Server</TableHead>
                     <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Genre</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Strategy</TableHead>
                     <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Template</TableHead>
                     <TableHead className="text-xs uppercase tracking-wider text-center py-4" style={{ color: "var(--muted-foreground)" }}>Artikel</TableHead>
                     <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Konten</TableHead>
@@ -853,6 +952,45 @@ export default function DomainsPage() {
                           ) : (
                             <span style={{ color: "var(--muted-foreground)" }}>—</span>
                           )}
+                        </TableCell>
+                        <TableCell className="py-4">
+                          {(() => {
+                            const cfg = strategyConfig[domain.strategy] ?? strategyConfig.whitehat
+                            const updating = strategyUpdating === domain.id
+                            return (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger
+                                  className="inline-flex items-center gap-1 rounded-full border-0 px-2 py-0.5 text-[11px] font-semibold transition-opacity hover:opacity-80 disabled:opacity-60"
+                                  style={{ background: cfg.bg, color: cfg.color }}
+                                  disabled={updating}
+                                  title="Klik untuk ubah strategy"
+                                >
+                                  {updating ? <Loader2 className="size-3 animate-spin" /> : null}
+                                  {cfg.label}
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start" className="min-w-[140px]">
+                                  {(Object.keys(strategyConfig) as Strategy[]).map((s) => {
+                                    const item = strategyConfig[s]
+                                    return (
+                                      <DropdownMenuItem
+                                        key={s}
+                                        onClick={() => handleStrategyChange(domain, s)}
+                                        className="gap-2"
+                                      >
+                                        <span
+                                          className="size-2 rounded-full"
+                                          style={{ background: item.color }}
+                                        />
+                                        <span style={{ color: domain.strategy === s ? item.color : "inherit", fontWeight: domain.strategy === s ? 600 : 400 }}>
+                                          {item.label}
+                                        </span>
+                                      </DropdownMenuItem>
+                                    )
+                                  })}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )
+                          })()}
                         </TableCell>
                         <TableCell className="py-4">
                           {domain.theme?.layoutName && templateConfig[domain.theme.layoutName] ? (

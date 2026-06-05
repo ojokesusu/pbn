@@ -57,6 +57,7 @@ model Domain {
   lastIndexCheck  DateTime?
   isAdult         Boolean  @default(false)
   adultDetectedAt DateTime?
+  strategy        String   @default("whitehat")  // whitehat | greyhat | blackhat
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -69,6 +70,7 @@ model Domain {
   schedulerJobs   SchedulerJob[]
   domainSchedule  DomainSchedule?
   nicheMapping    NicheMapping?
+  rankKeywords    RankKeyword[]
 
   @@schema("pbn")
 }
@@ -584,5 +586,65 @@ model BudgetState {
   alertSent       Boolean  @default(false)
   updatedAt       DateTime @updatedAt
 
+  @@schema("pbn")
+}
+
+// StrategyConfig — per-bucket rules (whitehat / greyhat / blackhat).
+// Three rows seeded by Phase 1 migration. Operator-editable via UI.
+// perServerCapMult multiplies BacklinkConfig.maxPerServerPerDay.
+model StrategyConfig {
+  id                    String   @id @default(cuid())
+  strategy              String   @unique               // whitehat | greyhat | blackhat
+  articlesPerWeek       Int      @default(3)           // white=3 grey=4 black=6
+  backlinkPerArticleMax Int      @default(1)           // white=1 grey=2 black=5
+  anchorExactPct        Int      @default(10)          // white=10 grey=35 black=70
+  perServerCapMult      Float    @default(0.5)         // white=0.5 grey=1.0 black=2.0 (multiplier on BacklinkConfig.maxPerServerPerDay)
+  contentMode           String   @default("hybrid_rss") // 'pure_ai' | 'hybrid_rss'
+  imageMode             String   @default("rss_first")  // 'rss_first' | 'stock_first'
+  description           String   @default("")
+  updatedAt             DateTime @updatedAt
+
+  @@schema("pbn")
+}
+
+// RankKeyword — operator-defined tracked keyword. Optionally bound to a PBN
+// domain (auto-seeded) or pure manual (e.g. money-site tracking).
+model RankKeyword {
+  id          String   @id @default(cuid())
+  keyword     String                                   // raw query string
+  domainId    String?                                  // optional — links to a PBN domain we want to track
+  targetUrl   String   @default("")                    // optional — explicit URL (e.g. money site) to look for in SERP
+  locale      String   @default("id")                  // SERP locale: id | en
+  region      String   @default("ID")                  // SERP region
+  device      String   @default("desktop")             // 'desktop' | 'mobile'
+  active      Boolean  @default(true)
+  source      String   @default("manual")              // 'manual' | 'auto_pbn' | 'auto_ms1' (where it was seeded from)
+  lastChecked DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  domain      Domain?  @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  snapshots   RankSnapshot[]
+
+  @@index([domainId])
+  @@index([active])
+  @@schema("pbn")
+}
+
+// RankSnapshot — daily SERP capture per RankKeyword. position = -1 means
+// not found in top-100. top10Json stores the raw top-10 SERP payload.
+model RankSnapshot {
+  id           String   @id @default(cuid())
+  keywordId    String
+  position     Int                                      // 1-100, -1 = not found in top-100
+  top10Json    Json                                     // [{rank, title, link, snippet}, ...] top 10 results
+  foundUrl     String   @default("")                    // the URL we matched (if any) inside top-100
+  costUsd      Float    @default(0)                     // SERP API cost for this snapshot
+  provider     String   @default("serper")              // 'serper' | 'serpapi' | 'dataforseo'
+  checkedAt    DateTime @default(now())
+
+  keyword      RankKeyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@index([keywordId, checkedAt])
   @@schema("pbn")
 }

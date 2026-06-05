@@ -31,6 +31,7 @@ import {
   Tag,
   ShieldAlert,
   Gamepad2,
+  TrendingUp,
 } from "lucide-react"
 import { useMe } from "@/hooks/use-me"
 import { AvatarDisplay } from "@/components/ui/avatar-display"
@@ -66,6 +67,7 @@ type SidebarStats = {
   healthyServers?: number
   adultDomains?: number
   iGamingDomains?: number
+  rankKeywordsActive?: number
 }
 
 type BadgeTone = "teal" | "lime" | "red" | "amber" | "purple" | "pink" | "muted"
@@ -211,6 +213,24 @@ const MENU_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: "SEO",
+    items: [
+      {
+        title: "Rank Tracker",
+        href: "/seo/ranks",
+        icon: TrendingUp,
+        tourId: "nav-seo-ranks",
+        // Active-keyword count. Hidden when zero so the badge doesn't dangle
+        // empty — same pattern as adult/igaming bukets above.
+        badge: (s) =>
+          s?.rankKeywordsActive && s.rankKeywordsActive > 0
+            ? fmtCount(s.rankKeywordsActive)
+            : null,
+        badgeTone: () => "teal",
+      },
+    ],
+  },
+  {
     label: "SISTEM",
     items: [
       {
@@ -339,21 +359,19 @@ export function AppSidebar() {
     >
       {/* ── Logo ── */}
       <SidebarHeader className="h-14 items-center justify-center border-b border-[color:var(--border)]">
-        <Link href="/" className="group/logo flex items-center gap-2.5 px-1">
-          <span
-            className={[
-              "flex shrink-0 items-center justify-center rounded-xl",
-              "size-8 bg-gradient-to-br from-[#0ea5e9] to-[#0284c7]",
-              "text-sm font-extrabold text-white",
-              "shadow-[0_0_12px_rgba(14,165,233,0.35)]",
-              "transition-all duration-300 group-hover/logo:shadow-[0_0_20px_rgba(14,165,233,0.5)] group-hover/logo:scale-110 group-hover/logo:rotate-3",
-            ].join(" ")}
-          >
-            P
-          </span>
-          <span className="truncate text-sm font-semibold tracking-tight text-[color:var(--secondary-foreground)]">
-            PBN ROKET
-          </span>
+        <Link href="/" className="group/logo flex items-center gap-2 px-1">
+          {/* Light-mode logo — hidden in dark via class:dark:hidden */}
+          <img
+            src="/pbn-logo-light.png"
+            alt="PBN ROKET"
+            className="block dark:hidden h-9 w-auto transition-transform duration-300 group-hover/logo:scale-105"
+          />
+          {/* Dark-mode logo — shown only in dark */}
+          <img
+            src="/pbn-logo-dark.png"
+            alt="PBN ROKET"
+            className="hidden dark:block h-9 w-auto transition-transform duration-300 group-hover/logo:scale-105"
+          />
         </Link>
       </SidebarHeader>
 

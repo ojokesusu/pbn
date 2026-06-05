@@ -15,6 +15,12 @@ import { pollinationsFromGenre } from "./pollinations";
 import { fetchNews, fetchFromActiveSources, fetchArticleFull } from "./rss-scraper";
 import { fetchFromActiveContentSources } from "./content-sources";
 import { pickImages } from "./images";
+import { pickProvider } from "./serp";
+
+// Daily rank-check tick batch size — caps SERP API spend per scheduler tick.
+// Without this, a 1000-keyword backlog could blow the daily Serper budget in
+// one tick. 5/tick × hourly cron = 120/day max, well under typical 1000/day plan.
+const RANK_CHECK_BATCH_PER_TICK = 5;
 
 const AUTHOR_NAMES = [
   "Rina Puspitasari", "Ahmad Fauzi", "Dewi Lestari", "Budi Santoso",
@@ -580,6 +586,101 @@ export async function generateSingleArticle(domainId: string): Promise<{
   }
 }
 
+// ── Daily rank-check sub-tick ──
+// Picks up to RANK_CHECK_BATCH_PER_TICK active RankKeyword rows that haven't
+// been checked in the last 23h, calls the configured SERP provider, and
+// persists a RankSnapshot per keyword. Cost is captured per-snapshot
+// (RankSnapshot.costUsd); TODO: roll into ApiUsage aggregate when that
+// pipeline lands.
+//
+// Schedule guard: only runs when the current UTC hour matches
+// SchedulerConfig.rankCheckHour (default 4 = 04:00 UTC). The 23h lastChecked
+// filter is the real idempotency gate — the hour-gate is just a cheap
+// short-circuit so most ticks of the day skip the DB query entirely.
+async function processRankCheckTick(
+  config: Record<string, unknown>,
+  now: Date,
+): Promise<{ checked: number; skipped: number; errors: string[] }> {
+  const errors: string[] = [];
+  const rankHour = (config as { rankCheckHour?: number | null }).rankCheckHour ?? 4;
+  if (now.getUTCHours() !== rankHour) {
+    return { checked: 0, skipped: 0, errors };
+  }
+
+  const provider = pickProvider();
+  const cutoff = new Date(now.getTime() - 23 * 60 * 60 * 1000);
+  const candidates = await prisma.rankKeyword.findMany({
+    where: {
+      active: true,
+      OR: [{ lastChecked: null }, { lastChecked: { lt: cutoff } }],
+    },
+    include: { domain: { select: { url: true } } },
+    take: RANK_CHECK_BATCH_PER_TICK,
+    orderBy: [{ lastChecked: { sort: "asc", nulls: "first" } }],
+  });
+
+  let checked = 0;
+  let skipped = 0;
+  for (const kw of candidates) {
+    try {
+      const resp = await provider.search({
+        keyword: kw.keyword,
+        locale: kw.locale,
+        region: kw.region,
+        device: (kw.device as "desktop" | "mobile") || "desktop",
+        num: 100,
+      });
+      if (!resp) {
+        console.warn(`[scheduler] rank-check provider returned null for "${kw.keyword}"`);
+        skipped++;
+        continue;
+      }
+
+      // Match rule precedence:
+      //   1. If keyword is bound to a PBN domain → match on domain.url prefix.
+      //   2. Else if explicit targetUrl set → match on that prefix.
+      //   3. Else → not applicable (position = -1).
+      let matchPrefix = "";
+      if (kw.domainId && kw.domain?.url) {
+        matchPrefix = kw.domain.url;
+      } else if (kw.targetUrl) {
+        matchPrefix = kw.targetUrl;
+      }
+
+      let position = -1;
+      let foundUrl = "";
+      if (matchPrefix) {
+        const hit = resp.results.find(r => r.link?.startsWith(matchPrefix));
+        if (hit) {
+          position = hit.rank;
+          foundUrl = hit.link;
+        }
+      }
+
+      await prisma.rankSnapshot.create({
+        data: {
+          keywordId: kw.id,
+          position,
+          top10Json: resp.results.slice(0, 10) as unknown as object,
+          foundUrl,
+          costUsd: resp.costUsd ?? 0,
+          provider: resp.provider ?? provider.key,
+        },
+      });
+      await prisma.rankKeyword.update({
+        where: { id: kw.id },
+        data: { lastChecked: now },
+      });
+      checked++;
+    } catch (err) {
+      const msg = String(err).substring(0, 200);
+      errors.push(`rank-check ${kw.keyword}: ${msg}`);
+    }
+  }
+
+  return { checked, skipped, errors };
+}
+
 // Process the scheduler tick — called by the cron endpoint
 // Finds domains that are due for a new article, generates + deploys
 export async function processSchedulerTick(): Promise<{
@@ -588,14 +689,25 @@ export async function processSchedulerTick(): Promise<{
   deployed: number;
   purged: number;
   backlinksPlaced: number;
+  ranksChecked: number;
   errors: string[];
 }> {
   const config = await getSchedulerConfig();
-  if (!config.isRunning) return { processed: 0, generated: 0, deployed: 0, purged: 0, backlinksPlaced: 0, errors: [] };
+  if (!config.isRunning) return { processed: 0, generated: 0, deployed: 0, purged: 0, backlinksPlaced: 0, ranksChecked: 0, errors: [] };
 
   const now = new Date();
   const errors: string[] = [];
-  let processed = 0, generated = 0, deployed = 0, purged = 0, backlinksPlaced = 0;
+  let processed = 0, generated = 0, deployed = 0, purged = 0, backlinksPlaced = 0, ranksChecked = 0;
+
+  // Pre-load StrategyConfig rows once for the whole tick — used below to
+  // attach per-domain strategy multipliers before the article-gen loop.
+  // phase 1: surface only; phase 2 will gate placements by it.
+  const strategyRows = await prisma.strategyConfig.findMany();
+  const strategyByKey: Record<string, typeof strategyRows[number]> = {};
+  for (const s of strategyRows) strategyByKey[s.strategy] = s;
+  // Base per-server cap from BacklinkConfig — read once, multiplied per-domain below.
+  const backlinkCfg = await prisma.backlinkConfig.findFirst();
+  const baseServerCap = backlinkCfg?.maxPerServerPerDay ?? 6;
 
   // Find domains that are due (nextScheduled <= now)
   // Skip adult domains entirely — they should never reach the article-gen pipeline.
@@ -615,6 +727,27 @@ export async function processSchedulerTick(): Promise<{
   for (const schedule of dueDomains) {
     const domain = schedule.domain;
     processed++;
+
+    // ── Strategy attachment (phase 1: surface only; phase 2 will gate placements by it) ──
+    // Look up the StrategyConfig row matching this domain's bucket
+    // (whitehat/greyhat/blackhat). Compute the two per-domain values the
+    // distributor + cadence calc will read in phase 2:
+    //   - perServerCapDaily: base * strategy.perServerCapMult
+    //   - articlesPerWeek:   strategy override (falls back to global config)
+    // We DON'T pass these into distributeBacklinks() yet — the distributor
+    // change lives in a follow-up. For now we just stamp them onto the
+    // in-memory domain row so downstream code (and logs) can see them.
+    const strategyKey = (domain as { strategy?: string }).strategy || "whitehat";
+    const strategyCfg = strategyByKey[strategyKey];
+    const perServerCapDaily = strategyCfg
+      ? Math.max(1, Math.round(baseServerCap * strategyCfg.perServerCapMult))
+      : baseServerCap;
+    const domainArticlesPerWeek = strategyCfg?.articlesPerWeek ?? config.articlesPerWeek;
+    (domain as unknown as { strategy: { key: string; perServerCapDaily: number; articlesPerWeek: number } }).strategy = {
+      key: strategyKey,
+      perServerCapDaily,
+      articlesPerWeek: domainArticlesPerWeek,
+    };
 
     // Create job record
     const job = await prisma.schedulerJob.create({
@@ -700,7 +833,8 @@ export async function processSchedulerTick(): Promise<{
       });
 
       // Update domain schedule: set next run time
-      const nextTime = calculateNextSchedule(config.articlesPerWeek, config.timeWindowStart, config.timeWindowEnd);
+      // Use strategy-aware articlesPerWeek (falls back to global config inside the attach block above).
+      const nextTime = calculateNextSchedule(domainArticlesPerWeek, config.timeWindowStart, config.timeWindowEnd);
       await prisma.domainSchedule.update({
         where: { id: schedule.id },
         data: {
@@ -719,8 +853,9 @@ export async function processSchedulerTick(): Promise<{
         data: { status: "failed", completedAt: new Date(), message: msg },
       });
 
-      // Still schedule next attempt (don't abandon the domain)
-      const nextTime = calculateNextSchedule(config.articlesPerWeek, config.timeWindowStart, config.timeWindowEnd);
+      // Still schedule next attempt (don't abandon the domain).
+      // Same strategy-aware cadence as the success path.
+      const nextTime = calculateNextSchedule(domainArticlesPerWeek, config.timeWindowStart, config.timeWindowEnd);
       await prisma.domainSchedule.update({
         where: { id: schedule.id },
         data: { nextScheduled: nextTime },
@@ -748,6 +883,21 @@ export async function processSchedulerTick(): Promise<{
     errors.push(`Backlink distribute: ${String(err).substring(0, 100)}`);
   }
 
+  // ── Daily rank-check sub-tick ──
+  // Self-gated by UTC hour (config.rankCheckHour, default 4 = 04:00 UTC) and
+  // by the 23h lastChecked window inside processRankCheckTick. Safe to call
+  // every tick — does nothing 23 hours of the day.
+  try {
+    const rankResult = await processRankCheckTick(config as unknown as Record<string, unknown>, now);
+    ranksChecked = rankResult.checked;
+    if (rankResult.errors.length > 0) errors.push(...rankResult.errors);
+    if (ranksChecked > 0) {
+      console.log(`[Scheduler] Rank-check: ${ranksChecked} checked, ${rankResult.skipped} skipped`);
+    }
+  } catch (err) {
+    errors.push(`Rank-check tick: ${String(err).substring(0, 100)}`);
+  }
+
   // Check for milestone notifications (fire once per threshold)
   try {
     await checkMilestones();
@@ -755,7 +905,7 @@ export async function processSchedulerTick(): Promise<{
     // Non-critical
   }
 
-  return { processed, generated, deployed, purged, backlinksPlaced, errors };
+  return { processed, generated, deployed, purged, backlinksPlaced, ranksChecked, errors };
 }
 
 // Activate domains in the scheduler

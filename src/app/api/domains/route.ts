@@ -151,6 +151,7 @@ export async function GET(request: NextRequest) {
           lastDeployed: true,
           isAdult: true,
           adultDetectedAt: true,
+          strategy: true,
           createdAt: true,
           updatedAt: true,
           theme: { select: { id: true, name: true, layoutName: true, isGenerated: true } },
