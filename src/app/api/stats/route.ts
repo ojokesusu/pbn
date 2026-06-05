@@ -18,6 +18,7 @@ export async function GET() {
       adultDomains,
       iGamingDomains,
       rankKeywordsActive,
+      indexNowUsedToday,
     ] = await Promise.all([
       prisma.domain.count(),
       prisma.article.count(),
@@ -61,6 +62,23 @@ export async function GET() {
       prisma.nicheMapping.count({ where: { niche: "igaming" } }),
       // Active rank-tracker keywords — drives the SEO sidebar badge.
       prisma.rankKeyword.count({ where: { active: true } }),
+      // IndexNow submissions today — drives the "Ping Status" sidebar
+      // badge so operator sees daily-cap consumption at a glance. UTC
+      // boundary matches /api/google-ping/status which is the source of
+      // truth for cap accounting.
+      prisma.indexNowLog.count({
+        where: {
+          submittedAt: {
+            gte: new Date(
+              Date.UTC(
+                new Date().getUTCFullYear(),
+                new Date().getUTCMonth(),
+                new Date().getUTCDate()
+              )
+            ),
+          },
+        },
+      }),
     ]);
 
     return NextResponse.json({
@@ -86,6 +104,7 @@ export async function GET() {
       adultDomains,
       iGamingDomains,
       rankKeywordsActive,
+      indexNowUsedToday,
     });
   } catch (error) {
     console.error("Failed to fetch stats:", error);

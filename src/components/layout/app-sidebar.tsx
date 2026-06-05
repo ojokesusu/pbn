@@ -32,6 +32,7 @@ import {
   ShieldAlert,
   Gamepad2,
   TrendingUp,
+  BarChart3,
 } from "lucide-react"
 import { useMe } from "@/hooks/use-me"
 import { AvatarDisplay } from "@/components/ui/avatar-display"
@@ -281,7 +282,7 @@ const MENU_GROUPS: NavGroup[] = [
       {
         title: "Ping Status",
         href: "/google-ping/status",
-        icon: Activity,
+        icon: BarChart3,
         tourId: "nav-ping-status",
         // IndexNow daily-cap usage. Amber when we cross 80% of the 10k cap
         // so the operator notices before the API hard-fails. Hidden when

@@ -118,8 +118,16 @@ export async function deployDomain(domainId: string): Promise<DeployResult> {
         data: { lastDeployed: new Date() },
       });
 
-      // Fire-and-forget IndexNow ping to Bing/Yandex — logged in DeployLog, visible in Google Ping page
-      submitToIndexNow(domainId).catch(() => {});
+      // IndexNow ping to Bing/Yandex — logged in DeployLog, visible in Google Ping page
+      try {
+        const result = await submitToIndexNow(domainId);
+        if (!result.success) {
+          console.warn(`[deploy] IndexNow non-success for ${domainId}: ${result.message ?? ""}`);
+        }
+      } catch (err) {
+        // IndexNow itself caught all errors internally; this is a defense.
+        console.warn(`[deploy] IndexNow threw for ${domainId}`, err);
+      }
 
       return {
         domainId,

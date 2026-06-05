@@ -71,6 +71,7 @@ model Domain {
   domainSchedule  DomainSchedule?
   nicheMapping    NicheMapping?
   rankKeywords    RankKeyword[]
+  indexNowLogs    IndexNowLog[]
 
   @@schema("pbn")
 }
@@ -646,5 +647,27 @@ model RankSnapshot {
   keyword      RankKeyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
 
   @@index([keywordId, checkedAt])
+  @@schema("pbn")
+}
+
+// IndexNowLog — per-URL submission record for IndexNow protocol pings.
+// Grouped by batchId so one call (n URLs) is queryable as a unit.
+// httpStatus=0 means no response (timeout / network error); errorMessage
+// carries the short reason. attempt tracks retries (1..3).
+model IndexNowLog {
+  id            String   @id @default(cuid())
+  domainId      String
+  batchId       String                                  // groups URLs submitted in the same call (uuid-like)
+  url           String                                  // exact URL submitted
+  httpStatus    Int      @default(0)                    // 0 = no response (timeout / network)
+  success       Boolean  @default(false)                // true if IndexNow accepted
+  errorMessage  String   @default("")                   // short error if failed
+  attempt       Int      @default(1)                    // 1..3 for retry tracking
+  submittedAt   DateTime @default(now())
+
+  domain        Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId, submittedAt])
+  @@index([batchId])
   @@schema("pbn")
 }

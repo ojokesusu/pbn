@@ -14,6 +14,7 @@ import crypto from "crypto";
 // ── IndexNow Key ──
 // One key shared across all PBN domains. Stored in .env or generated once.
 const INDEXNOW_KEY_LENGTH = 32;
+const INDEXNOW_DAILY_CAP = 10000;
 
 export function getIndexNowKey(): string {
   // Use env var if set, otherwise generate deterministic key from a seed
@@ -45,8 +46,62 @@ export interface IndexNowResult {
   submittedAt: Date;
 }
 
+// ── Helpers ──
+
+function startOfTodayUTC(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Per-day cap usage — exported for dashboards / pre-flight UI
+export async function getIndexNowDailyUsage(): Promise<{ usedToday: number; cap: number; remaining: number }> {
+  const usedToday = await prisma.indexNowLog.count({
+    where: { submittedAt: { gte: startOfTodayUTC() } },
+  });
+  return {
+    usedToday,
+    cap: INDEXNOW_DAILY_CAP,
+    remaining: Math.max(0, INDEXNOW_DAILY_CAP - usedToday),
+  };
+}
+
+// Bulk-insert per-URL log rows. Failure to log must not crash submission flow.
+async function logPerUrl(
+  domainId: string,
+  batchId: string,
+  urlList: string[],
+  httpStatus: number,
+  success: boolean,
+  errorMessage: string,
+  attempt: number,
+): Promise<void> {
+  try {
+    await prisma.indexNowLog.createMany({
+      data: urlList.map((url) => ({
+        domainId,
+        batchId,
+        url,
+        httpStatus,
+        success,
+        errorMessage,
+        attempt,
+      })),
+    });
+  } catch {
+    // Swallow — aggregate DeployLog still captures outcome.
+  }
+}
+
 // Submit URLs for a single domain to IndexNow
+// Signature preserved: (domainId: string) => Promise<IndexNowResult>
 export async function submitToIndexNow(domainId: string): Promise<IndexNowResult> {
+  const batchId = crypto.randomUUID();
+  const submittedAt = new Date();
+
   const domain = await prisma.domain.findUnique({
     where: { id: domainId },
     include: {
@@ -65,7 +120,7 @@ export async function submitToIndexNow(domainId: string): Promise<IndexNowResult
   const host = siteUrl.replace(/^https?:\/\//, "");
   const key = getIndexNowKey();
 
-  // Build URL list: homepage + sitemap + articles
+  // Build URL list: homepage + sitemap + about + latest articles
   const urlList = [
     siteUrl,
     `${siteUrl}/sitemap.xml`,
@@ -73,65 +128,162 @@ export async function submitToIndexNow(domainId: string): Promise<IndexNowResult
     ...domain.articles.map((a) => `${siteUrl}/articles/${a.slug}.html`),
   ];
 
+  // ── 1) Pre-submit validation: key.txt accessibility ──
+  const keyUrl = `${siteUrl}/${key}.txt`;
   try {
-    const res = await fetch("https://api.indexnow.org/indexnow", {
-      method: "POST",
-      headers: { "Content-Type": "application/json; charset=utf-8" },
-      body: JSON.stringify({
-        host,
-        key,
-        keyLocation: `${siteUrl}/${key}.txt`,
-        urlList,
-      }),
-      signal: AbortSignal.timeout(15000),
+    const keyRes = await fetch(keyUrl, {
+      method: "GET",
+      signal: AbortSignal.timeout(5000),
     });
-
-    const success = res.status >= 200 && res.status < 300;
-    const message = success ? "OK" : `HTTP ${res.status}`;
-
-    // Log the submission
-    await prisma.deployLog.create({
-      data: {
+    if (!keyRes.ok) {
+      await prisma.deployLog.create({
+        data: {
+          domainId,
+          action: "indexnow",
+          status: "failed",
+          message: `IndexNow aborted: key.txt not accessible (HTTP ${keyRes.status})`,
+          filesChanged: 0,
+        },
+      });
+      return {
         domainId,
-        action: "indexnow",
-        status: success ? "success" : "failed",
-        message: `IndexNow: ${res.status} (${urlList.length} URLs)`,
-        filesChanged: urlList.length,
-      },
-    });
-
-    return {
-      domainId,
-      url: domain.url,
-      success,
-      status: res.status,
-      message,
-      urlsSubmitted: urlList.length,
-      submittedAt: new Date(),
-    };
+        url: domain.url,
+        success: false,
+        status: keyRes.status,
+        message: "key.txt not accessible",
+        urlsSubmitted: 0,
+        submittedAt,
+      };
+    }
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Network error";
-
+    const message = err instanceof Error ? err.message : "key.txt fetch error";
     await prisma.deployLog.create({
       data: {
         domainId,
         action: "indexnow",
         status: "failed",
-        message: `IndexNow: ${message}`,
+        message: `IndexNow aborted: key.txt not accessible (${message})`,
         filesChanged: 0,
       },
     });
-
     return {
       domainId,
       url: domain.url,
       success: false,
       status: 0,
-      message,
+      message: "key.txt not accessible",
       urlsSubmitted: 0,
-      submittedAt: new Date(),
+      submittedAt,
     };
   }
+
+  // ── 1b) Pre-flight daily 10k cap (Bing IndexNow per key per day) ──
+  const usedToday = await prisma.indexNowLog.count({
+    where: { submittedAt: { gte: startOfTodayUTC() } },
+  });
+  if (usedToday + urlList.length > INDEXNOW_DAILY_CAP) {
+    await prisma.deployLog.create({
+      data: {
+        domainId,
+        action: "indexnow",
+        status: "failed",
+        message: `IndexNow aborted: daily 10k cap reached (used=${usedToday}, requested=${urlList.length})`,
+        filesChanged: 0,
+      },
+    });
+    return {
+      domainId,
+      url: domain.url,
+      success: false,
+      status: 0,
+      message: "daily 10k cap reached",
+      urlsSubmitted: 0,
+      submittedAt,
+    };
+  }
+
+  // ── 2) Submit with retry-with-backoff ──
+  const backoffMs = [200, 400, 800];
+  const maxAttempts = 3;
+  let attempt = 0;
+  let lastStatus = 0;
+  let lastError = "";
+  let success = false;
+
+  while (attempt < maxAttempts) {
+    attempt += 1;
+    try {
+      const res = await fetch("https://api.indexnow.org/indexnow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+        body: JSON.stringify({
+          host,
+          key,
+          keyLocation: keyUrl,
+          urlList,
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      lastStatus = res.status;
+
+      if (res.status >= 200 && res.status < 300) {
+        success = true;
+        lastError = "";
+        break;
+      }
+
+      // Retry on 429 + 5xx; bail on other 4xx
+      const retryable = res.status === 429 || res.status >= 500;
+      lastError = `HTTP ${res.status}`;
+      if (!retryable) break;
+    } catch (err) {
+      // Timeout (AbortError) + network errors are retryable
+      lastStatus = 0;
+      lastError = err instanceof Error ? err.message : "network error";
+    }
+
+    if (attempt < maxAttempts) {
+      const base = backoffMs[attempt - 1] ?? 800;
+      const jitter = Math.floor(Math.random() * 100);
+      await sleep(base + jitter);
+    }
+  }
+
+  // ── 2b) Per-URL IndexNowLog rows (final attempt outcome) ──
+  await logPerUrl(
+    domainId,
+    batchId,
+    urlList,
+    lastStatus,
+    success,
+    success ? "" : lastError.slice(0, 200),
+    attempt,
+  );
+
+  // ── 3) Aggregate DeployLog (preserved for callers) ──
+  const aggregateMessage = success
+    ? `IndexNow: ${lastStatus} (${urlList.length} URLs, ${attempt} attempt${attempt > 1 ? "s" : ""})`
+    : `IndexNow: failed after ${attempt} attempt${attempt > 1 ? "s" : ""} — ${lastError || "unknown"} (${urlList.length} URLs)`;
+
+  await prisma.deployLog.create({
+    data: {
+      domainId,
+      action: "indexnow",
+      status: success ? "success" : "failed",
+      message: aggregateMessage,
+      filesChanged: success ? urlList.length : 0,
+    },
+  });
+
+  return {
+    domainId,
+    url: domain.url,
+    success,
+    status: lastStatus,
+    message: success ? "OK" : lastError || "failed",
+    urlsSubmitted: success ? urlList.length : 0,
+    submittedAt,
+  };
 }
 
 // ── Legacy ping (kept for backward compat, but deprecated) ──
