@@ -41,7 +41,7 @@ interface DeployLog {
   filesChanged: number;
   message: string;
   deployedAt: string;
-  domain: { name: string; url: string };
+  domain: { id: string; name: string; url: string };
 }
 
 export default function DeployPage() {
@@ -264,8 +264,15 @@ export default function DeployPage() {
                 <TableBody>
                   {paginatedLogs.map((log) => (
                     <TableRow key={log.id} className="border-[color:var(--border)] hover:bg-[color:var(--muted)]/50">
-                      <TableCell className="font-medium text-[color:var(--foreground)]">
-                        {log.domain.name}
+                      <TableCell className="font-medium">
+                        <Link
+                          href={`/domains/${log.domain.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[color:var(--foreground)] hover:text-[color:var(--primary)] hover:underline"
+                        >
+                          {log.domain.name}
+                        </Link>
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="border-[color:var(--border)] text-[color:var(--muted-foreground)]">{log.action}</Badge>

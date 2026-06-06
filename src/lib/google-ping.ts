@@ -129,11 +129,15 @@ export async function submitToIndexNow(domainId: string): Promise<IndexNowResult
   ];
 
   // ── 1) Pre-submit validation: key.txt accessibility ──
+  // Indonesian VPS + Railway egress can be slow on cold connections — 5s
+  // was eating timeouts on healthy origins. 15s is the practical ceiling
+  // before this whole pipeline turns sluggish.
   const keyUrl = `${siteUrl}/${key}.txt`;
   try {
     const keyRes = await fetch(keyUrl, {
       method: "GET",
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(15000),
+      redirect: "follow",
     });
     if (!keyRes.ok) {
       await prisma.deployLog.create({
@@ -141,7 +145,7 @@ export async function submitToIndexNow(domainId: string): Promise<IndexNowResult
           domainId,
           action: "indexnow",
           status: "failed",
-          message: `IndexNow aborted: key.txt not accessible (HTTP ${keyRes.status})`,
+          message: `IndexNow aborted: key.txt HTTP ${keyRes.status} ${keyRes.statusText || ""}`.trim(),
           filesChanged: 0,
         },
       });
@@ -156,13 +160,20 @@ export async function submitToIndexNow(domainId: string): Promise<IndexNowResult
       };
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : "key.txt fetch error";
+    // Node fetch wraps the real reason in err.cause (e.g. UND_ERR_CONNECT_TIMEOUT,
+    // ENOTFOUND, ECONNREFUSED, CERT_HAS_EXPIRED). Surface it so the deploy log
+    // shows what's actually breaking instead of generic "fetch failed".
+    const e = err as { message?: string; cause?: { code?: string; message?: string; errno?: number } };
+    const causeCode = e?.cause?.code;
+    const causeMsg = e?.cause?.message;
+    const baseMsg = e?.message ?? "fetch error";
+    const detail = causeCode ? `${causeCode}` : causeMsg ? causeMsg.substring(0, 80) : baseMsg;
     await prisma.deployLog.create({
       data: {
         domainId,
         action: "indexnow",
         status: "failed",
-        message: `IndexNow aborted: key.txt not accessible (${message})`,
+        message: `IndexNow aborted: key.txt not accessible (${detail})`,
         filesChanged: 0,
       },
     });

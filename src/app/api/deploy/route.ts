@@ -40,7 +40,7 @@ export async function GET(request: Request) {
     const where = domainId ? { domainId } : {};
     const logs = await prisma.deployLog.findMany({
       where,
-      include: { domain: { select: { name: true, url: true } } },
+      include: { domain: { select: { id: true, name: true, url: true } } },
       orderBy: { deployedAt: "desc" },
       take: 50,
     });

@@ -262,6 +262,8 @@ export default function ArticlesPage() {
                   {article.domain ? (
                     <Link
                       href={`/domains/${article.domain.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="truncate hover:underline"
                       style={{ color: "var(--primary)" }}
                     >
@@ -301,6 +303,8 @@ export default function ArticlesPage() {
                       {article.domain ? (
                         <Link
                           href={`/domains/${article.domain.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="hover:underline"
                           style={{ color: "var(--primary)" }}
                         >
