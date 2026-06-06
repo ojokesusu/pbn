@@ -3,6 +3,9 @@ import path from "path";
 import fs from "fs/promises";
 import { prisma } from "./db";
 import { getIndexNowKey, getIndexNowKeyFileContent } from "./google-ping";
+import { SCHEDULER_CATEGORY_SLUGS } from "./scheduler";
+
+const SCHEDULER_SLUGS = new Set<string>(SCHEDULER_CATEGORY_SLUGS);
 
 const BUILD_DIR = path.join(process.cwd(), "builds");
 
@@ -393,22 +396,22 @@ export async function generateSite(domainId: string): Promise<{ files: Generated
     accentColor: theme.accentColor,
     bgColor: theme.bgColor,
     textColor: theme.textColor,
-    // Pick top 6 categories by article count (filters out junk tag-categories)
-    // Strategy: only show categories with 2+ articles. They're real navigation,
-    // not WordPress tag-spam imported as categories.
+    // Render nav using ONLY scheduler-managed category slugs. Legacy WP
+    // imports (BENCANA / AJI SEMARANG / ARSIP IJAZAH / UNCATEGORIZED / etc.)
+    // are kept in the DB so historic articles still resolve, but they NEVER
+    // surface in nav anymore — the previous "≥2 articles" heuristic let
+    // big legacy buckets out-rank fresh scheduler categories.
     categories: (() => {
-      const catWithCount = domain.categories.map((c) => ({
-        name: decodeHtmlEntities(c.name),
-        slug: c.slug,
-        description: c.description,
-        count: domain.articles.filter(a => a.categoryId === c.id).length,
-      }));
-      // Sort: highest article count first, then alphabetically
+      const catWithCount = domain.categories
+        .filter((c) => SCHEDULER_SLUGS.has(c.slug))
+        .map((c) => ({
+          name: decodeHtmlEntities(c.name),
+          slug: c.slug,
+          description: c.description,
+          count: domain.articles.filter(a => a.categoryId === c.id).length,
+        }));
       catWithCount.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-
-      // Only include categories with 2+ articles (real categories, not tags)
-      const real = catWithCount.filter(c => c.count >= 2);
-      return real.slice(0, 6).map(c => ({ name: c.name, slug: c.slug, description: c.description }));
+      return catWithCount.slice(0, 6).map(c => ({ name: c.name, slug: c.slug, description: c.description }));
     })(),
     // Extra variables for engine-generated themes
     headingFont: theme.headingFont || theme.fontFamily,

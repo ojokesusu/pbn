@@ -365,6 +365,36 @@ function calculateNextSchedule(articlesPerWeek: number, timeStart: number, timeE
   return next;
 }
 
+// ── Scheduler-managed category contract ───────────────────────────────────
+// Every scheduler-created article picks a category from THIS list. Legacy
+// WP imports (BENCANA / ARSIP IJAZAH / UNCATEGORIZED / etc.) stay in the DB
+// for backwards compat with already-tagged historic articles, but new
+// articles never get assigned to them, and the generator filters them out
+// of the rendered nav. Slugs are stable — never rename. To add a new
+// category, push to NAMES and the slug derives below.
+export const SCHEDULER_CATEGORY_NAMES = ["Berita", "Tips", "Review", "Tutorial", "Opini"] as const;
+export const SCHEDULER_CATEGORY_SLUGS = SCHEDULER_CATEGORY_NAMES.map(
+  (n) => n.toLowerCase().replace(/\s+/g, "-"),
+);
+
+// Idempotently ensure the 5 scheduler-managed Category rows exist for a
+// domain. Returns { name -> id } for round-robin / random picking. Safe to
+// call from both initialDomainSetup (fresh domain) and generateSingleArticle
+// (imported domain that never went through initial setup).
+async function ensureSchedulerCategories(domainId: string): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const name of SCHEDULER_CATEGORY_NAMES) {
+    const slug = name.toLowerCase().replace(/\s+/g, "-");
+    const cat = await prisma.category.upsert({
+      where: { domainId_slug: { domainId, slug } },
+      update: {},
+      create: { name, slug, description: `Artikel ${name}`, domainId },
+    });
+    out[name] = cat.id;
+  }
+  return out;
+}
+
 // Initial setup for a brand new domain: create theme + categories + backdated articles
 export async function initialDomainSetup(
   domainId: string,
@@ -417,17 +447,8 @@ export async function initialDomainSetup(
     }
 
     // 2. Create categories
-    const catNames = ["Berita", "Tips", "Review", "Tutorial", "Opini"];
-    const dbCats: Record<string, string> = {};
-    for (const name of catNames) {
-      const slug = name.toLowerCase().replace(/\s+/g, "-");
-      const cat = await prisma.category.upsert({
-        where: { domainId_slug: { domainId, slug } },
-        update: {},
-        create: { name, slug, description: `Artikel ${name}`, domainId },
-      });
-      dbCats[name] = cat.id;
-    }
+    const dbCats = await ensureSchedulerCategories(domainId);
+    const catNames = SCHEDULER_CATEGORY_NAMES;
 
     // 3. Generate backdated articles
     const publishDates = generateBackdates(articleCount, 4); // spread over 4 months
@@ -598,9 +619,14 @@ export async function generateSingleArticle(
       console.warn(`[scheduler] pickImages failed (single article):`, imgErr);
     }
 
-    // Find a random category for this domain
-    const categories = await prisma.category.findMany({ where: { domainId }, take: 5 });
-    const catId = categories.length > 0 ? categories[Math.floor(Math.random() * categories.length)].id : null;
+    // Pick a category from the scheduler-managed set only — never from
+    // legacy WP imports (BENCANA / ARSIP IJAZAH / UNCATEGORIZED / etc.)
+    // Ensure the 5 scheduler categories exist first; safe to call repeatedly.
+    const schedCats = await ensureSchedulerCategories(domainId);
+    const schedCatIds = Object.values(schedCats);
+    const catId = schedCatIds.length > 0
+      ? schedCatIds[Math.floor(Math.random() * schedCatIds.length)]
+      : null;
 
     await prisma.article.create({
       data: {
