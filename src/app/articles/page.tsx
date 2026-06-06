@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Plus, Pencil, Trash2, FileText, Sparkles, Search, ChevronLeft, ChevronRight } from "lucide-react"
 
 import { SidebarInset } from "@/components/ui/sidebar"
@@ -258,9 +259,17 @@ export default function ArticlesPage() {
                   )}
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
-                  <span className="truncate" style={{ color: "var(--muted-foreground)" }}>
-                    {article.domain?.name ?? "—"}
-                  </span>
+                  {article.domain ? (
+                    <Link
+                      href={`/domains/${article.domain.id}`}
+                      className="truncate hover:underline"
+                      style={{ color: "var(--primary)" }}
+                    >
+                      {article.domain.name}
+                    </Link>
+                  ) : (
+                    <span className="truncate" style={{ color: "var(--muted-foreground)" }}>—</span>
+                  )}
                   <span className="shrink-0" style={{ color: "var(--muted-foreground)" }}>
                     {formatDate(article.publishedAt)}
                   </span>
@@ -288,8 +297,18 @@ export default function ArticlesPage() {
                     <TableCell className="font-medium max-w-[300px] truncate py-4" style={{ color: "var(--secondary-foreground)" }}>
                       {article.title}
                     </TableCell>
-                    <TableCell className="py-4" style={{ color: "var(--muted-foreground)" }}>
-                      {article.domain?.name ?? "--"}
+                    <TableCell className="py-4">
+                      {article.domain ? (
+                        <Link
+                          href={`/domains/${article.domain.id}`}
+                          className="hover:underline"
+                          style={{ color: "var(--primary)" }}
+                        >
+                          {article.domain.name}
+                        </Link>
+                      ) : (
+                        <span style={{ color: "var(--muted-foreground)" }}>--</span>
+                      )}
                     </TableCell>
                     <TableCell className="py-4" style={{ color: "var(--muted-foreground)" }}>
                       {article.category?.name ?? "--"}
