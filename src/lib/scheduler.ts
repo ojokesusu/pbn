@@ -16,6 +16,7 @@ import { fetchNews, fetchFromActiveSources, fetchArticleFull } from "./rss-scrap
 import { fetchFromActiveContentSources } from "./content-sources";
 import { pickImages } from "./images";
 import { pickProvider } from "./serp";
+import { SCHEDULER_CATEGORY_NAMES } from "./category-config";
 
 // Daily rank-check tick batch size — caps SERP API spend per scheduler tick.
 // Without this, a 1000-keyword backlog could blow the daily Serper budget in
@@ -364,18 +365,6 @@ function calculateNextSchedule(articlesPerWeek: number, timeStart: number, timeE
 
   return next;
 }
-
-// ── Scheduler-managed category contract ───────────────────────────────────
-// Every scheduler-created article picks a category from THIS list. Legacy
-// WP imports (BENCANA / ARSIP IJAZAH / UNCATEGORIZED / etc.) stay in the DB
-// for backwards compat with already-tagged historic articles, but new
-// articles never get assigned to them, and the generator filters them out
-// of the rendered nav. Slugs are stable — never rename. To add a new
-// category, push to NAMES and the slug derives below.
-export const SCHEDULER_CATEGORY_NAMES = ["Berita", "Tips", "Review", "Tutorial", "Opini"] as const;
-export const SCHEDULER_CATEGORY_SLUGS = SCHEDULER_CATEGORY_NAMES.map(
-  (n) => n.toLowerCase().replace(/\s+/g, "-"),
-);
 
 // Idempotently ensure the 5 scheduler-managed Category rows exist for a
 // domain. Returns { name -> id } for round-robin / random picking. Safe to

@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs/promises";
 import { prisma } from "./db";
 import { getIndexNowKey, getIndexNowKeyFileContent } from "./google-ping";
-import { SCHEDULER_CATEGORY_SLUGS } from "./scheduler";
+import { SCHEDULER_CATEGORY_SLUGS } from "./category-config";
 
 const SCHEDULER_SLUGS = new Set<string>(SCHEDULER_CATEGORY_SLUGS);
 
