@@ -23,8 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Rocket, Loader2, CheckCircle2, XCircle, Eye, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Rocket, Loader2, CheckCircle2, XCircle, Eye, Search, ChevronLeft, ChevronRight, AlertCircle, Wrench } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { diagnoseDeployError } from "@/lib/deploy-error-diagnose";
 
 interface Domain {
   id: string;
@@ -298,8 +299,53 @@ export default function DeployPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-[color:var(--secondary-foreground)]">{log.filesChanged}</TableCell>
-                      <TableCell className="max-w-[300px] truncate text-[color:var(--muted-foreground)]">
-                        {log.message}
+                      <TableCell className="max-w-[420px]">
+                        {(() => {
+                          const dx = diagnoseDeployError(log.action, log.status, log.message);
+                          if (dx.category === "SUCCESS") {
+                            return <span className="text-[color:var(--muted-foreground)] text-sm">{log.message}</span>;
+                          }
+                          const sevColor = dx.severity === "fatal"
+                            ? "text-red-400"
+                            : dx.severity === "config"
+                            ? "text-amber-400"
+                            : dx.severity === "data"
+                            ? "text-blue-400"
+                            : "text-[color:var(--muted-foreground)]";
+                          return (
+                            <details className="group">
+                              <summary className="cursor-pointer flex items-center gap-1.5 list-none">
+                                <AlertCircle className={`h-3.5 w-3.5 ${sevColor} shrink-0`} />
+                                <span className={`text-sm font-medium ${sevColor}`}>{dx.label}</span>
+                                <span className="text-[10px] opacity-60 ml-1 group-open:hidden">[expand]</span>
+                                <span className="text-[10px] opacity-60 ml-1 hidden group-open:inline">[collapse]</span>
+                              </summary>
+                              <div className="mt-2 space-y-1.5 text-xs">
+                                <div className="text-[color:var(--secondary-foreground)]">
+                                  <span className="opacity-60">Cause: </span>
+                                  {dx.cause}
+                                </div>
+                                <div className="text-[color:var(--secondary-foreground)] flex items-start gap-1">
+                                  <Wrench className="h-3 w-3 mt-0.5 shrink-0 opacity-60" />
+                                  <span><span className="opacity-60">Fix: </span>{dx.fix}</span>
+                                </div>
+                                {dx.actionHref && dx.actionLabel && (
+                                  <Link
+                                    href={dx.actionHref}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-block mt-1 px-2 py-0.5 rounded bg-[color:var(--primary)]/15 text-[color:var(--primary)] hover:bg-[color:var(--primary)]/25 text-xs"
+                                  >
+                                    {dx.actionLabel} →
+                                  </Link>
+                                )}
+                                <div className="pt-1 mt-1 border-t border-[color:var(--border)] text-[10px] text-[color:var(--muted-foreground)] font-mono break-all">
+                                  raw: {log.message || "(empty)"}
+                                </div>
+                              </div>
+                            </details>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-[color:var(--muted-foreground)]">
                         {new Date(log.deployedAt).toLocaleString()}
