@@ -306,9 +306,9 @@ export default function DomainsPage() {
   }
 
   function toggleSelect(id: string) {
-    // Block toggling for already-active domains — they can't be re-activated
-    const domain = domains.find((d) => d.id === id)
-    if (domain?.schedulerActive) return
+    // Selection is decoupled from bulk-action eligibility — any row may be
+    // selected. Per-action handlers (bulkActivateScheduler etc.) filter the
+    // selection to what's actually applicable.
     setSelectedIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -319,14 +319,13 @@ export default function DomainsPage() {
 
   function toggleSelectAllVisible() {
     setSelectedIds((prev) => {
-      // Only select INACTIVE visible domains (skip already-active)
-      const selectableIds = paginated.filter((d) => !d.schedulerActive).map((d) => d.id)
-      const allSelected = selectableIds.length > 0 && selectableIds.every((id) => prev.has(id))
+      const visibleIds = paginated.map((d) => d.id)
+      const allSelected = visibleIds.length > 0 && visibleIds.every((id) => prev.has(id))
       const next = new Set(prev)
       if (allSelected) {
-        for (const id of selectableIds) next.delete(id)
+        for (const id of visibleIds) next.delete(id)
       } else {
-        for (const id of selectableIds) next.add(id)
+        for (const id of visibleIds) next.add(id)
       }
       return next
     })
@@ -738,11 +737,10 @@ export default function DomainsPage() {
                       <div className="flex items-start gap-2">
                         <input
                           type="checkbox"
-                          checked={domain.schedulerActive ? true : isSelected}
-                          disabled={domain.schedulerActive}
+                          checked={isSelected}
                           onChange={() => toggleSelect(domain.id)}
-                          className="mt-1 size-4 rounded accent-[#10b981] disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
-                          title={domain.schedulerActive ? "Sudah aktif di scheduler" : "Pilih untuk aktivasi"}
+                          className="mt-1 size-4 rounded accent-[#0ea5e9] cursor-pointer shrink-0"
+                          title="Pilih domain untuk bulk action"
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
@@ -875,12 +873,12 @@ export default function DomainsPage() {
                       <input
                         type="checkbox"
                         checked={
-                          paginated.filter((d) => !d.schedulerActive).length > 0 &&
-                          paginated.filter((d) => !d.schedulerActive).every((d) => selectedIds.has(d.id))
+                          paginated.length > 0 &&
+                          paginated.every((d) => selectedIds.has(d.id))
                         }
                         onChange={toggleSelectAllVisible}
                         className="size-4 rounded cursor-pointer accent-[#0ea5e9]"
-                        title="Select semua yang BELUM aktif di scheduler"
+                        title="Pilih semua domain di halaman ini"
                       />
                     </TableHead>
                     <TableHead className="text-xs uppercase tracking-wider py-4" style={{ color: "var(--muted-foreground)" }}>Nama Domain</TableHead>
@@ -905,12 +903,10 @@ export default function DomainsPage() {
                         <TableCell className="py-4">
                           <input
                             type="checkbox"
-                            checked={domain.schedulerActive ? true : isSelected}
-                            disabled={domain.schedulerActive}
+                            checked={isSelected}
                             onChange={() => toggleSelect(domain.id)}
-                            className="size-4 rounded accent-[#10b981] disabled:opacity-60 disabled:cursor-not-allowed"
-                            title={domain.schedulerActive ? "Sudah aktif di scheduler" : "Pilih untuk aktivasi"}
-                            style={{ cursor: domain.schedulerActive ? "not-allowed" : "pointer" }}
+                            className="size-4 rounded accent-[#0ea5e9] cursor-pointer"
+                            title="Pilih domain untuk bulk action"
                           />
                         </TableCell>
                         <TableCell className="font-medium py-4" style={{ color: "var(--secondary-foreground)" }}>
