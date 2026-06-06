@@ -44,11 +44,12 @@ const PRIORITY_BY_NICHE: Record<string, string[]> = {
   ekonomi: ["rss_image", "og_scrape", "wikipedia", "unsplash", "pexels"],
   internasional: ["rss_image", "og_scrape", "wikipedia", "unsplash", "pexels"],
   religion: ["unsplash", "pexels"],
-  // iGaming — the ONLY niche where pollinations is allowed. rss_image first
-  // (if the source feed supplied one), then og_scrape in case a source RSS
-  // provides a real casino-promo image; otherwise pollinations renders
-  // neon/slot/cards aesthetic which fits.
-  igaming: ["rss_image", "og_scrape", "pollinations"],
+  // iGaming — pollinations was the niche-specific AI fallback for casino /
+  // slot / neon aesthetic, but the service turned paid 2026-06-06 (HTTP 402)
+  // so it's been removed. Fall through to unsplash/pexels with the article
+  // title as the search query — real photos aren't ideal for the aesthetic
+  // but beat the broken-image situation we got into.
+  igaming: ["rss_image", "og_scrape", "unsplash", "pexels"],
 };
 
 const DEFAULT_CHAIN = ["unsplash", "pexels"];
