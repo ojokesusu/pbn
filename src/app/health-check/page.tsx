@@ -15,6 +15,13 @@ interface Stats {
   checked: number
   alive: number
   dead: number
+  // Phase 2: sub-categories so 1 inflated "Dead" stat doesn't mislead.
+  // never_deployed = no content live (deploy queue work, not health fix)
+  // suspect_false_dead = deployed <3 days ago but probe failed (Railway egress)
+  // genuinely_dead = deployed >3 days, still dead (real problem to fix)
+  neverDeployed?: number
+  suspectFalseDead?: number
+  genuinelyDead?: number
   withWordPress: number
   totalPosts: number
   lastCheck: string | null
@@ -380,6 +387,51 @@ export default function HealthCheckPage() {
     })
   }
 
+  async function handleReprobeSuspect() {
+    if (!stats?.suspectFalseDead) return
+    await runBatchCheck({
+      mode: "suspect" as "all" | "dead" | "deployed",
+      total: stats.suspectFalseDead,
+      confirmMessage: `Re-probe ${stats.suspectFalseDead} domain "suspect false-dead"?\n\nIni domain yang marked dead tapi deploy worker baru sukses upload <3 hari. Kemungkinan besar masih hidup — probe sebelumnya gagal karena Railway egress gak reach Indonesian VPS. Klik OK untuk verify ulang.`,
+    })
+  }
+
+  async function handleQueueNeverDeployed() {
+    if (!stats?.neverDeployed) return
+    const ok = await confirm({
+      message: `Push ${stats.neverDeployed} domain "belum deploy" ke antrian deploy?\n\nDomain ini ada di inventory tapi belum punya konten live, jadi otomatis ke-mark dead. Setelah masuk antrian, daemon RDP akan deploy bertahap (pace ~93/hari).`,
+    })
+    if (!ok) return
+    try {
+      // 1. Fetch all non-adult never-deployed domain IDs.
+      const listRes = await fetch("/api/domains?neverDeployed=1&limit=2000")
+      const listData = await listRes.json()
+      const ids: string[] = Array.isArray(listData)
+        ? listData.filter((d: { lastDeployed: string | null; isAdult: boolean }) => !d.lastDeployed && !d.isAdult).map((d: { id: string }) => d.id)
+        : []
+      if (ids.length === 0) {
+        alert("Tidak ada domain yang bisa di-queue.")
+        return
+      }
+      // 2. Bulk add ke deploy queue via existing endpoint.
+      const addRes = await fetch("/api/provisioning/deploy-queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add", domainIds: ids, priority: "normal" }),
+      })
+      if (!addRes.ok) {
+        const err = await addRes.json().catch(() => ({}))
+        alert(err.error || "Gagal menambahkan ke antrian")
+        return
+      }
+      alert(`${ids.length} domain berhasil masuk antrian. Cek progress di /provisioning.`)
+      fetchStats()
+    } catch (err) {
+      console.error(err)
+      alert("Error: " + String(err))
+    }
+  }
+
   async function handleCheckDeployed() {
     // Deployed count isn't in stats state here, fetch separately via body
     const res = await fetch("/api/domains?deployedOnly=1")
@@ -450,9 +502,12 @@ export default function HealthCheckPage() {
             <div className="rounded-xl border p-5 shadow-sm" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
               <div className="flex items-center gap-2 mb-2">
                 <XCircle className="size-4 text-red-500" />
-                <p className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>Dead</p>
+                <p className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>Dead total</p>
               </div>
               <p className="text-2xl font-bold text-red-600">{stats.dead}</p>
+              <p className="text-[10px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+                breakdown ↓
+              </p>
             </div>
 
             <div className="rounded-xl border p-5 shadow-sm" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
@@ -473,13 +528,97 @@ export default function HealthCheckPage() {
           </div>
         )}
 
-        {/* === Server Roll-Up — Compact ===
-            Sorted lowest-alivePct first (critical at top). Healthy servers
-            collapsed by default behind a "+ N OK" pill so the operator sees
-            problem servers without scrolling. suspectFalseDead surfaces
-            domains marked dead by Railway probe but deployed recently by
-            the RDP daemon — likely network reachability, not real outage. */}
-        {(() => {
+        {/* === Dead-pool breakdown with actions ===
+            The single "Dead = 1450" number above was misleading: 60% are
+            domains that never deployed yet, 31% are probe false-positives,
+            only 9% are genuinely broken. Surface that and wire each bucket
+            to its actual fix. */}
+        {stats && (stats.dead > 0) && (
+          <div className="rounded-xl border shadow-sm mb-6 overflow-hidden" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+            <div className="px-6 py-4 border-b" style={{ borderColor: "var(--border)" }}>
+              <h3 className="font-semibold" style={{ color: "var(--foreground)" }}>Dead — breakdown & action</h3>
+              <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+                Total {stats.dead} dead. Beda akar masalah, beda action. Klik tombol di card untuk action sesuai.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4">
+              {/* Never deployed → not really dead, just no content live yet */}
+              <div className="rounded-lg border p-4" style={{ background: "rgba(14,165,233,0.06)", borderColor: "rgba(14,165,233,0.25)" }}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Activity className="size-4" style={{ color: "#0ea5e9" }} />
+                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#0ea5e9" }}>Belum deploy</span>
+                </div>
+                <p className="text-2xl font-bold tabular-nums" style={{ color: "#0ea5e9" }}>{stats.neverDeployed ?? 0}</p>
+                <p className="text-xs mb-3" style={{ color: "var(--muted-foreground)" }}>
+                  Ada di inventory tapi belum punya konten live. Daemon perlu deploy dulu — fix-nya bukan health check.
+                </p>
+                <Button
+                  size="sm"
+                  className="w-full rounded-lg"
+                  style={{ background: "linear-gradient(135deg, #0ea5e9, #0284c7)", color: "#ffffff" }}
+                  onClick={handleQueueNeverDeployed}
+                  disabled={!stats.neverDeployed || checking}
+                  title="Push semua domain belum-deploy ke antrian deploy worker"
+                >
+                  <Zap className="size-4 mr-1" />
+                  Queue {stats.neverDeployed ?? 0} ke antrian deploy
+                </Button>
+              </div>
+
+              {/* Suspect false-dead → re-probe to confirm */}
+              <div className="rounded-lg border p-4" style={{ background: "rgba(168,85,247,0.06)", borderColor: "rgba(168,85,247,0.25)" }}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <AlertTriangle className="size-4" style={{ color: "#a855f7" }} />
+                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#a855f7" }}>Suspect false-dead</span>
+                </div>
+                <p className="text-2xl font-bold tabular-nums" style={{ color: "#a855f7" }}>{stats.suspectFalseDead ?? 0}</p>
+                <p className="text-xs mb-3" style={{ color: "var(--muted-foreground)" }}>
+                  Deploy worker baru sukses upload <strong>{"<"} 3 hari</strong> tapi probe Railway gagal. Kemungkinan besar masih hidup — probe ulang.
+                </p>
+                <Button
+                  size="sm"
+                  className="w-full rounded-lg"
+                  style={{ background: "linear-gradient(135deg, #a855f7, #9333ea)", color: "#ffffff" }}
+                  onClick={handleReprobeSuspect}
+                  disabled={!stats.suspectFalseDead || checking}
+                  title="Re-probe hanya domain suspect — verify ulang yang kemungkinan false-positive"
+                >
+                  {checking ? <Loader2 className="size-4 mr-1 animate-spin" /> : <RefreshCw className="size-4 mr-1" />}
+                  Re-probe {stats.suspectFalseDead ?? 0} suspect
+                </Button>
+              </div>
+
+              {/* Genuinely dead → operator action needed */}
+              <div className="rounded-lg border p-4" style={{ background: "rgba(239,68,68,0.06)", borderColor: "rgba(239,68,68,0.25)" }}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <XCircle className="size-4" style={{ color: "#ef4444" }} />
+                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#ef4444" }}>Bermasalah (real)</span>
+                </div>
+                <p className="text-2xl font-bold tabular-nums" style={{ color: "#ef4444" }}>{stats.genuinelyDead ?? 0}</p>
+                <p className="text-xs mb-3" style={{ color: "var(--muted-foreground)" }}>
+                  Deployed {">"} 3 hari, tetap mati. Real broken — perlu fix manual: DNS / SSL / server. Lihat tabel "Domain Mati" di bawah, klik row buat tip per HTTP status.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full rounded-lg"
+                  style={{ borderColor: "rgba(239,68,68,0.4)", color: "#ef4444" }}
+                  onClick={() => {
+                    const el = document.getElementById("dead-domains-table")
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" })
+                  }}
+                >
+                  Scroll ke tabel ↓
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* === Server Roll-Up — moved to BOTTOM of page (UX: utama atas, info bawah).
+            Render lokasi awal disuppress via `false &&`. Canonical render-nya
+            di bawah, setelah tabel Domain Mati. */}
+        {false && (() => {
           const sorted = [...rollup].sort((a, b) => a.alivePct - b.alivePct)
           const critical = sorted.filter((s) => tierOf(s.alivePct) === "critical")
           const warning = sorted.filter((s) => tierOf(s.alivePct) === "warning")
@@ -648,8 +787,8 @@ export default function HealthCheckPage() {
           )
         })()}
 
-        {/* Information banner — false-dead awareness */}
-        {rollup.some((s) => (s.suspectFalseDead ?? 0) > 0) && (
+        {/* Information banner — false-dead awareness (DISUPPRESS, moved to bottom) */}
+        {false && rollup.some((s) => (s.suspectFalseDead ?? 0) > 0) && (
           <div className="rounded-xl border p-3 mb-6 flex items-start gap-3" style={{ background: "rgba(168,85,247,0.06)", borderColor: "rgba(168,85,247,0.25)" }}>
             <AlertTriangle className="size-4 mt-0.5 shrink-0" style={{ color: "#a855f7" }} />
             <div className="text-xs">
@@ -841,7 +980,7 @@ export default function HealthCheckPage() {
 
         {/* === Dead Domains List (for team to fix) === */}
         {deadData && deadData.total > 0 && (
-          <div className="rounded-xl border shadow-sm overflow-hidden" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+          <div id="dead-domains-table" className="rounded-xl border shadow-sm overflow-hidden" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
             <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
               <div className="flex items-center gap-3">
                 <div className="flex items-center justify-center size-9 rounded-lg" style={{ background: "rgba(239,68,68,0.1)" }}>
@@ -1157,6 +1296,98 @@ export default function HealthCheckPage() {
             )}
           </div>
         )}
+
+        {/* === Server Roll-Up — moved to BOTTOM of page ===
+            Reasoning per Sandi 2026-06-07: fungsi utama (action: re-probe,
+            queue, fix per-row) di ATAS. Roll-up = info reference sekunder,
+            taruh bawah. Versi compact: tanpa tier chips, healthy ter-collapse
+            default, sortir critical-first. */}
+        {(() => {
+          if (rollup.length === 0) return null
+          const sorted = [...rollup].sort((a, b) => a.alivePct - b.alivePct)
+          const critical = sorted.filter((s) => tierOf(s.alivePct) === "critical")
+          const warning = sorted.filter((s) => tierOf(s.alivePct) === "warning")
+          const healthy = sorted.filter((s) => tierOf(s.alivePct) === "healthy")
+          const visible = rollupShowHealthy ? sorted : [...critical, ...warning]
+          return (
+            <div className="rounded-xl border shadow-sm overflow-hidden mt-6" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+              <div className="px-6 py-4 border-b flex items-center gap-3" style={{ borderColor: "var(--border)" }}>
+                <div className="flex items-center justify-center size-9 rounded-lg" style={{ background: "rgba(14,165,233,0.1)" }}>
+                  <ServerIcon className="size-4" style={{ color: "#0ea5e9" }} />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold" style={{ color: "var(--foreground)" }}>Server Roll-Up (reference)</h3>
+                  <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                    Persentase alive per server. {critical.length} critical · {warning.length} warning · {healthy.length} healthy.
+                  </p>
+                </div>
+                {rollupLoading && <Loader2 className="size-4 animate-spin" style={{ color: "var(--muted-foreground)" }} />}
+              </div>
+
+              {visible.length === 0 ? (
+                <div className="px-6 py-6 text-center text-sm" style={{ color: "var(--muted-foreground)" }}>
+                  Semua server healthy. 🎉
+                </div>
+              ) : (
+                <div className="grid gap-2 p-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}>
+                  {visible.map((s) => {
+                    const pct = s.alivePct
+                    const t = tierOf(pct)
+                    const color = t === "critical" ? "#ef4444" : t === "warning" ? "#f59e0b" : "#10b981"
+                    const bg = t === "critical" ? "rgba(239,68,68,0.06)" : t === "warning" ? "rgba(245,158,11,0.06)" : "rgba(16,185,129,0.06)"
+                    const border = t === "critical" ? "rgba(239,68,68,0.2)" : t === "warning" ? "rgba(245,158,11,0.2)" : "rgba(16,185,129,0.2)"
+                    const isActive = deadServerFilter === s.label
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => { setDeadServerFilter(isActive ? "" : s.label); setDeadPage(1); window.scrollTo({ top: 0, behavior: "smooth" }) }}
+                        className="rounded-lg border px-2.5 py-2 text-left transition-all hover:shadow-md"
+                        style={{ background: bg, borderColor: isActive ? color : border, borderWidth: isActive ? 2 : 1 }}
+                        title={`${s.label} — ${s.host} — ${s.alive}/${s.total} alive${s.suspectFalseDead ? ` — ${s.suspectFalseDead} suspect false-dead` : ""}. Klik untuk filter tabel di atas.`}
+                      >
+                        <div className="flex items-baseline justify-between gap-1.5 mb-1">
+                          <div className="font-semibold text-xs truncate" style={{ color: "var(--foreground)" }}>{s.label}</div>
+                          <span className="text-[11px] font-bold tabular-nums shrink-0" style={{ color }}>{pct}%</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-1 mb-1.5">
+                          <span className="text-[10px] tabular-nums" style={{ color: "var(--muted-foreground)" }}>
+                            <strong style={{ color }}>{s.alive}</strong>/{s.total}
+                          </span>
+                          {(s.suspectFalseDead ?? 0) > 0 && (
+                            <span
+                              className="text-[10px] tabular-nums px-1 rounded"
+                              style={{ background: "rgba(168,85,247,0.15)", color: "#a855f7" }}
+                              title={`${s.suspectFalseDead} dead tapi baru deploy <3 hari — kemungkinan false positive`}
+                            >
+                              ?{s.suspectFalseDead}
+                            </span>
+                          )}
+                        </div>
+                        <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "var(--muted)" }}>
+                          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {healthy.length > 0 && (
+                <div className="px-3 pb-3">
+                  <button
+                    type="button"
+                    onClick={() => setRollupShowHealthy(!rollupShowHealthy)}
+                    className="w-full rounded-lg border-dashed border px-3 py-2 text-xs text-center hover:bg-[color:var(--muted)] transition-colors"
+                    style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+                  >
+                    {rollupShowHealthy ? `Hide ${healthy.length} healthy` : `+ ${healthy.length} server healthy disembunyikan — klik untuk show`}
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        })()}
       </div>
     </SidebarInset>
   )

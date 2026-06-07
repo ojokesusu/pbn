@@ -278,7 +278,7 @@ export async function POST(request: NextRequest) {
       limit?: number;
       offset?: number;
       domainId?: string;
-      filter?: "dead" | "deployed";
+      filter?: "dead" | "deployed" | "suspect";
     };
 
     let domains: Array<{ id: string; url: string; isAlive: boolean; firstFailureAt: Date | null; avgResponseMs: number }>;
@@ -311,6 +311,22 @@ export async function POST(request: NextRequest) {
         where: { lastDeployed: { not: null } },
         select: selectShape,
         orderBy: { lastChecked: { sort: "asc", nulls: "first" } },
+        take: limit || undefined,
+        skip: offset || undefined,
+      });
+    } else if (filter === "suspect") {
+      // Suspect false-dead: marked dead by Railway probe but deploy worker
+      // successfully wrote files in the last 3 days. Re-probe these so the
+      // operator can see how many actually flip back to alive on retry.
+      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+      domains = await prisma.domain.findMany({
+        where: {
+          isAlive: false,
+          isAdult: false,
+          lastDeployed: { gte: threeDaysAgo },
+        },
+        select: selectShape,
+        orderBy: { lastDeployed: "desc" },
         take: limit || undefined,
         skip: offset || undefined,
       });
@@ -455,6 +471,7 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   try {
     const domains = await prisma.domain.findMany({
+      where: { isAdult: false },
       select: {
         id: true,
         isAlive: true,
@@ -462,26 +479,53 @@ export async function GET() {
         hasWordPress: true,
         wpPostCount: true,
         lastChecked: true,
+        lastDeployed: true,
       },
     });
 
-    const checked = domains.filter(d => d.lastChecked).length;
-    const alive = domains.filter(d => d.isAlive).length;
-    const withWp = domains.filter(d => d.hasWordPress).length;
+    const checked = domains.filter((d) => d.lastChecked).length;
+    const alive = domains.filter((d) => d.isAlive).length;
+    const withWp = domains.filter((d) => d.hasWordPress).length;
     const totalPosts = domains.reduce((sum, d) => sum + d.wpPostCount, 0);
+
+    // Sub-categorize the dead pool so the operator can act on the right
+    // root cause instead of staring at one inflated number:
+    //   neverDeployed      = no content live yet — fix by adding to deploy queue.
+    //   suspectFalseDead   = deployed in last 3 days but probe says dead —
+    //                        almost certainly Railway egress unreachable, not real.
+    //   genuinelyDead      = deployed >3 days ago, still dead — real broken.
+    const suspectWindowMs = 3 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    let neverDeployed = 0;
+    let suspectFalseDead = 0;
+    let genuinelyDead = 0;
+    for (const d of domains) {
+      if (d.isAlive) continue;
+      if (!d.lastDeployed) {
+        neverDeployed++;
+      } else if (now - new Date(d.lastDeployed).getTime() < suspectWindowMs) {
+        suspectFalseDead++;
+      } else {
+        genuinelyDead++;
+      }
+    }
 
     return NextResponse.json({
       total: domains.length,
       checked,
       alive,
       dead: checked - alive,
+      neverDeployed,
+      suspectFalseDead,
+      genuinelyDead,
       withWordPress: withWp,
       totalPosts,
-      lastCheck: domains
-        .map(d => d.lastChecked)
-        .filter(Boolean)
-        .sort()
-        .pop() || null,
+      lastCheck:
+        domains
+          .map((d) => d.lastChecked)
+          .filter(Boolean)
+          .sort()
+          .pop() || null,
     });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
