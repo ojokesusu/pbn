@@ -59,6 +59,15 @@ interface ServerRollupRow {
   total: number
   alive: number
   alivePct: number
+  suspectFalseDead?: number
+}
+
+type RollupTier = "critical" | "warning" | "healthy"
+
+function tierOf(pct: number): RollupTier {
+  if (pct < 50) return "critical"
+  if (pct < 85) return "warning"
+  return "healthy"
 }
 
 // Map machine-readable errorReason → user-friendly Indonesian label.
@@ -227,6 +236,8 @@ export default function HealthCheckPage() {
   // Server roll-up state
   const [rollup, setRollup] = useState<ServerRollupRow[]>([])
   const [rollupLoading, setRollupLoading] = useState(false)
+  const [rollupTierFilter, setRollupTierFilter] = useState<RollupTier | "all">("all")
+  const [rollupShowHealthy, setRollupShowHealthy] = useState(false)
 
   const fetchStats = useCallback(async () => {
     try {
@@ -462,75 +473,195 @@ export default function HealthCheckPage() {
           </div>
         )}
 
-        {/* === Server Roll-Up === */}
-        <div className="rounded-xl border shadow-sm mb-6 overflow-hidden" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-          <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: "var(--border)" }}>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center size-9 rounded-lg" style={{ background: "rgba(14,165,233,0.1)" }}>
-                <ServerIcon className="size-4" style={{ color: "#0ea5e9" }} />
-              </div>
-              <div>
-                <h3 className="font-semibold" style={{ color: "var(--foreground)" }}>Server Roll-Up</h3>
-                <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>Persentase domain hidup per server. Klik untuk filter daftar di bawah.</p>
-              </div>
-            </div>
-            {rollupLoading && <Loader2 className="size-4 animate-spin" style={{ color: "var(--muted-foreground)" }} />}
-          </div>
+        {/* === Server Roll-Up — Compact ===
+            Sorted lowest-alivePct first (critical at top). Healthy servers
+            collapsed by default behind a "+ N OK" pill so the operator sees
+            problem servers without scrolling. suspectFalseDead surfaces
+            domains marked dead by Railway probe but deployed recently by
+            the RDP daemon — likely network reachability, not real outage. */}
+        {(() => {
+          const sorted = [...rollup].sort((a, b) => a.alivePct - b.alivePct)
+          const critical = sorted.filter((s) => tierOf(s.alivePct) === "critical")
+          const warning = sorted.filter((s) => tierOf(s.alivePct) === "warning")
+          const healthy = sorted.filter((s) => tierOf(s.alivePct) === "healthy")
+          const totalSuspect = rollup.reduce((sum, s) => sum + (s.suspectFalseDead ?? 0), 0)
 
-          {rollup.length === 0 ? (
-            <div className="px-6 py-8 text-center text-sm" style={{ color: "var(--muted-foreground)" }}>
-              {rollupLoading ? "Memuat..." : "Belum ada data server."}
-            </div>
-          ) : (
-            <div className="grid gap-3 p-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
-              {rollup.map((s) => {
-                const pct = s.alivePct
-                let color = "#ef4444"
-                let bg = "rgba(239,68,68,0.08)"
-                let border = "rgba(239,68,68,0.25)"
-                if (pct > 85) {
-                  color = "#10b981"
-                  bg = "rgba(16,185,129,0.08)"
-                  border = "rgba(16,185,129,0.25)"
-                } else if (pct >= 50) {
-                  color = "#f59e0b"
-                  bg = "rgba(245,158,11,0.08)"
-                  border = "rgba(245,158,11,0.25)"
-                }
-                const isActive = deadServerFilter === s.label
-                return (
+          let visible: ServerRollupRow[] = []
+          if (rollupTierFilter === "critical") visible = critical
+          else if (rollupTierFilter === "warning") visible = warning
+          else if (rollupTierFilter === "healthy") visible = healthy
+          else visible = rollupShowHealthy ? sorted : [...critical, ...warning]
+
+          return (
+            <div className="rounded-xl border shadow-sm mb-6 overflow-hidden" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+              <div className="px-6 py-4 border-b flex items-center justify-between flex-wrap gap-3" style={{ borderColor: "var(--border)" }}>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center size-9 rounded-lg" style={{ background: "rgba(14,165,233,0.1)" }}>
+                    <ServerIcon className="size-4" style={{ color: "#0ea5e9" }} />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold" style={{ color: "var(--foreground)" }}>Server Roll-Up</h3>
+                    <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                      Default: server bermasalah dulu. Klik card untuk filter daftar bawah.
+                    </p>
+                  </div>
+                </div>
+                {rollupLoading && <Loader2 className="size-4 animate-spin" style={{ color: "var(--muted-foreground)" }} />}
+              </div>
+
+              {/* Tier chips — quick filter + summary in one strip */}
+              {rollup.length > 0 && (
+                <div className="px-6 py-3 border-b flex flex-wrap items-center gap-2" style={{ borderColor: "var(--border)", background: "var(--background)" }}>
+                  {(["all", "critical", "warning", "healthy"] as const).map((tier) => {
+                    const count =
+                      tier === "all" ? sorted.length :
+                      tier === "critical" ? critical.length :
+                      tier === "warning" ? warning.length :
+                      healthy.length
+                    const isActive = rollupTierFilter === tier
+                    const color =
+                      tier === "critical" ? "#ef4444" :
+                      tier === "warning" ? "#f59e0b" :
+                      tier === "healthy" ? "#10b981" :
+                      "#0ea5e9"
+                    const label =
+                      tier === "all" ? "Semua" :
+                      tier === "critical" ? "Critical <50%" :
+                      tier === "warning" ? "Warning 50-85%" :
+                      "Healthy >85%"
+                    return (
+                      <button
+                        key={tier}
+                        type="button"
+                        onClick={() => setRollupTierFilter(tier)}
+                        className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
+                        style={{
+                          background: isActive ? color : `${color}15`,
+                          color: isActive ? "#ffffff" : color,
+                          borderWidth: 1,
+                          borderColor: isActive ? color : `${color}30`,
+                          borderStyle: "solid",
+                        }}
+                      >
+                        {label} <span className="tabular-nums opacity-80 ml-1">({count})</span>
+                      </button>
+                    )
+                  })}
+                  {totalSuspect > 0 && (
+                    <span
+                      className="ml-auto text-xs flex items-center gap-1.5 px-2 py-1 rounded-md"
+                      style={{ background: "rgba(168,85,247,0.12)", color: "#a855f7" }}
+                      title="Domain marked dead tapi deploy worker masih bisa upload — kemungkinan Railway egress gak reach Indo VPS, bukan domain mati"
+                    >
+                      <AlertTriangle className="size-3" />
+                      {totalSuspect} suspect false-dead
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {visible.length === 0 ? (
+                <div className="px-6 py-8 text-center text-sm" style={{ color: "var(--muted-foreground)" }}>
+                  {rollupLoading
+                    ? "Memuat..."
+                    : rollup.length === 0
+                    ? "Belum ada data server."
+                    : rollupTierFilter !== "all"
+                    ? "Tidak ada server di tier ini."
+                    : "Semua server healthy 🎉"}
+                </div>
+              ) : (
+                <div className="grid gap-2 p-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}>
+                  {visible.map((s) => {
+                    const pct = s.alivePct
+                    const t = tierOf(pct)
+                    const color = t === "critical" ? "#ef4444" : t === "warning" ? "#f59e0b" : "#10b981"
+                    const bg = t === "critical" ? "rgba(239,68,68,0.06)" : t === "warning" ? "rgba(245,158,11,0.06)" : "rgba(16,185,129,0.06)"
+                    const border = t === "critical" ? "rgba(239,68,68,0.2)" : t === "warning" ? "rgba(245,158,11,0.2)" : "rgba(16,185,129,0.2)"
+                    const isActive = deadServerFilter === s.label
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => { setDeadServerFilter(isActive ? "" : s.label); setDeadPage(1) }}
+                        className="rounded-lg border px-2.5 py-2 text-left transition-all hover:shadow-md"
+                        style={{
+                          background: bg,
+                          borderColor: isActive ? color : border,
+                          borderWidth: isActive ? 2 : 1,
+                        }}
+                        title={`${s.label} — ${s.host} — ${s.alive}/${s.total} alive${s.suspectFalseDead ? ` — ${s.suspectFalseDead} suspect false-dead` : ""}`}
+                      >
+                        <div className="flex items-baseline justify-between gap-1.5 mb-1">
+                          <div className="font-semibold text-xs truncate" style={{ color: "var(--foreground)" }}>{s.label}</div>
+                          <span className="text-[11px] font-bold tabular-nums shrink-0" style={{ color }}>{pct}%</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-1 mb-1.5">
+                          <span className="text-[10px] tabular-nums" style={{ color: "var(--muted-foreground)" }}>
+                            <strong style={{ color }}>{s.alive}</strong>/{s.total}
+                          </span>
+                          {(s.suspectFalseDead ?? 0) > 0 && (
+                            <span
+                              className="text-[10px] tabular-nums px-1 rounded"
+                              style={{ background: "rgba(168,85,247,0.15)", color: "#a855f7" }}
+                              title={`${s.suspectFalseDead} dead tapi baru deploy <3 hari — kemungkinan false positive`}
+                            >
+                              ?{s.suspectFalseDead}
+                            </span>
+                          )}
+                        </div>
+                        <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "var(--muted)" }}>
+                          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* "+ N healthy" pill — only when default mode and there are healthy ones hidden */}
+              {rollupTierFilter === "all" && !rollupShowHealthy && healthy.length > 0 && (
+                <div className="px-3 pb-3">
                   <button
-                    key={s.id}
                     type="button"
-                    onClick={() => { setDeadServerFilter(isActive ? "" : s.label); setDeadPage(1) }}
-                    className="rounded-lg border p-3 text-left transition-all hover:shadow-md"
-                    style={{
-                      background: bg,
-                      borderColor: isActive ? color : border,
-                      borderWidth: isActive ? 2 : 1,
-                    }}
-                    title={`Filter daftar domain ke server ${s.label}`}
+                    onClick={() => setRollupShowHealthy(true)}
+                    className="w-full rounded-lg border-dashed border px-3 py-2 text-xs text-center hover:bg-[color:var(--muted)] transition-colors"
+                    style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
                   >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="font-semibold text-sm truncate" style={{ color: "var(--foreground)" }}>{s.label}</div>
-                      <span className="text-xs font-bold tabular-nums" style={{ color }}>{pct}%</span>
-                    </div>
-                    <div className="text-[11px] font-mono mb-2 truncate" style={{ color: "var(--muted-foreground)" }}>{s.host}</div>
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <CheckCircle2 className="size-3" style={{ color }} />
-                      <span className="text-xs tabular-nums" style={{ color: "var(--secondary-foreground)" }}>
-                        <strong style={{ color }}>{s.alive}</strong> / {s.total} hidup
-                      </span>
-                    </div>
-                    <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "var(--muted)" }}>
-                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
-                    </div>
+                    + {healthy.length} server healthy disembunyikan — klik untuk show
                   </button>
-                )
-              })}
+                </div>
+              )}
+              {rollupTierFilter === "all" && rollupShowHealthy && healthy.length > 0 && (
+                <div className="px-3 pb-3">
+                  <button
+                    type="button"
+                    onClick={() => setRollupShowHealthy(false)}
+                    className="w-full rounded-lg border-dashed border px-3 py-2 text-xs text-center hover:bg-[color:var(--muted)] transition-colors"
+                    style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+                  >
+                    Hide {healthy.length} healthy
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          )
+        })()}
+
+        {/* Information banner — false-dead awareness */}
+        {rollup.some((s) => (s.suspectFalseDead ?? 0) > 0) && (
+          <div className="rounded-xl border p-3 mb-6 flex items-start gap-3" style={{ background: "rgba(168,85,247,0.06)", borderColor: "rgba(168,85,247,0.25)" }}>
+            <AlertTriangle className="size-4 mt-0.5 shrink-0" style={{ color: "#a855f7" }} />
+            <div className="text-xs">
+              <strong style={{ color: "#a855f7" }}>Suspect false-dead:</strong>{" "}
+              <span style={{ color: "var(--secondary-foreground)" }}>
+                Health Check probe dari Railway gak reach beberapa Indonesian VPS (firewall / routing), padahal deploy worker dari RDP sukses upload file dalam 3 hari terakhir.
+                Counter <strong>?N</strong> di card = domain mati menurut probe, tapi kemungkinan masih hidup.
+                Klik <strong>Cek Deployed Saja</strong> untuk re-verify hanya domain yang dideploy aktif.
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* === Long-Standing Issues === */}
         {longStandingIssues.length > 0 && (
