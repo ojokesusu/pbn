@@ -196,31 +196,24 @@ async function main() {
           await c.query(
             `UPDATE "pbn"."Domain" SET
                "isAlive" = false, "httpStatus" = $1, "lastChecked" = NOW(),
-               "writtenOff" = true, "writeOffReason" = 'dns_dead_nxdomain', "writeOffAt" = NOW()
+               "writeOff" = true
              WHERE id = $2`,
             [r.httpStatus, r.id],
           );
         } else if (action === "re_queue") {
           await c.query(
             `UPDATE "pbn"."Domain" SET
-               "httpStatus" = $1, "lastChecked" = NOW(), "needsRecheck" = true
+               "httpStatus" = $1, "lastChecked" = NOW()
              WHERE id = $2`,
             [r.httpStatus, r.id],
           );
-        } else if (action === "flag_cert_renewal") {
+        } else if (action === "flag_cert_renewal" || action === "manual_review") {
+          // No dedicated needsCertRenewal/needsManualReview column in schema —
+          // just record the real httpStatus + lastChecked so the operator can
+          // filter on httpStatus in the dashboard.
           await c.query(
             `UPDATE "pbn"."Domain" SET
-               "httpStatus" = $1, "lastChecked" = NOW(),
-               "needsCertRenewal" = true
-             WHERE id = $2`,
-            [r.httpStatus, r.id],
-          );
-        } else {
-          // manual_review: just record the real httpStatus + flag
-          await c.query(
-            `UPDATE "pbn"."Domain" SET
-               "httpStatus" = $1, "lastChecked" = NOW(),
-               "needsManualReview" = true
+               "httpStatus" = $1, "lastChecked" = NOW()
              WHERE id = $2`,
             [r.httpStatus, r.id],
           );

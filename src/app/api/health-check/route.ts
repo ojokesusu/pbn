@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getLiveCount, getDeadCount, getEverDeployedCount } from "@/lib/domain-stats";
 import * as tls from "tls";
 import { URL as NodeURL } from "url";
 
@@ -507,24 +508,28 @@ export async function POST(request: NextRequest) {
 // GET — return summary stats from last health check
 export async function GET() {
   try {
-    const domains = await prisma.domain.findMany({
-      where: {
-        isAdult: false,
-        NOT: { server: { status: "archived" } },
-      },
-      select: {
-        id: true,
-        isAlive: true,
-        httpStatus: true,
-        hasWordPress: true,
-        wpPostCount: true,
-        lastChecked: true,
-        lastDeployed: true,
-      },
-    });
+    const [domains, alive, dead, everDeployed] = await Promise.all([
+      prisma.domain.findMany({
+        where: {
+          isAdult: false,
+          NOT: { server: { status: "archived" } },
+        },
+        select: {
+          id: true,
+          isAlive: true,
+          httpStatus: true,
+          hasWordPress: true,
+          wpPostCount: true,
+          lastChecked: true,
+          lastDeployed: true,
+        },
+      }),
+      getLiveCount(),
+      getDeadCount(),
+      getEverDeployedCount(),
+    ]);
 
     const checked = domains.filter((d) => d.lastChecked).length;
-    const alive = domains.filter((d) => d.isAlive).length;
     const withWp = domains.filter((d) => d.hasWordPress).length;
     const totalPosts = domains.reduce((sum, d) => sum + d.wpPostCount, 0);
 
@@ -554,7 +559,8 @@ export async function GET() {
       total: domains.length,
       checked,
       alive,
-      dead: checked - alive,
+      dead,
+      everDeployed,
       neverDeployed,
       suspectFalseDead,
       genuinelyDead,

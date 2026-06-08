@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSchedulerConfig } from "@/lib/scheduler";
 import { getServerSchedulerStatus } from "@/lib/server-scheduler";
+import { getDeployedTodayCount } from "@/lib/domain-stats";
 
 // GET — scheduler status + stats
 export async function GET() {
@@ -35,7 +36,7 @@ export async function GET() {
       where: { createdAt: { gte: todayStart } },
     });
     const todayGenerated = todayJobs.reduce((sum, j) => sum + j.articlesCreated, 0);
-    const todayDeployed = todayJobs.filter(j => j.filesDeployed > 0).length;
+    const todayDeployed = await getDeployedTodayCount();
 
     const serverStatus = getServerSchedulerStatus();
 

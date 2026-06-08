@@ -232,7 +232,9 @@ function buildAnchorCandidates(
   return out;
 }
 
-export async function distributeBacklinks(): Promise<DistributeResult> {
+export async function distributeBacklinks(
+  perServerCapDailyOverride?: Record<string, number>
+): Promise<DistributeResult> {
   // Config
   let config = await prisma.backlinkConfig.findFirst();
   if (!config) {
@@ -403,16 +405,21 @@ export async function distributeBacklinks(): Promise<DistributeResult> {
     const perArticleCap =
       strategyRow?.backlinkPerArticleMax ?? config.maxPerArticle;
 
-    // Per-server cap — strategy MULTIPLIES global maxPerServerPerDay.
+    // Per-server cap — caller-supplied override wins. Otherwise strategy
+    // MULTIPLIES global maxPerServerPerDay.
+    const domainServerId = domainArticles[0]?.domain?.serverId ?? "_unassigned";
+    const overrideCap = perServerCapDailyOverride?.[domainServerId];
     const mult = strategyRow?.perServerCapMult ?? 1;
-    const effectiveServerCap = Number.isFinite(maxPerServerPerDay)
-      ? Math.round(maxPerServerPerDay * mult)
-      : Number.POSITIVE_INFINITY;
+    const effectiveServerCap =
+      typeof overrideCap === "number" && Number.isFinite(overrideCap)
+        ? overrideCap
+        : Number.isFinite(maxPerServerPerDay)
+          ? Math.round(maxPerServerPerDay * mult)
+          : Number.POSITIVE_INFINITY;
 
     // All articles in a domain share the same source server, so we can short-
     // circuit the entire domain if its server has already hit the (strategy-
     // adjusted) daily cap.
-    const domainServerId = domainArticles[0]?.domain?.serverId ?? "_unassigned";
     if ((perServerToday[domainServerId] ?? 0) >= effectiveServerCap) continue;
 
     const shuffledArticles = [...domainArticles].sort(() => Math.random() - 0.5);

@@ -28,8 +28,10 @@ const RANK_CHECK_BATCH_PER_TICK = 5;
 // tick where minute <= 15 so a slightly-late cron still fires. The 4h
 // lastChecked cutoff is the real idempotency gate — a stalled tick can't
 // re-check the same domain twice in the same window.
+// Batch=200 gives ~3 day full-fleet sweep across 3 windows; existing
+// concurrency=10 handles 200/tick fine (20 sequential waves per tick).
 const HEALTH_CHECK_HOURS: number[] = [6, 14, 22];
-const HEALTH_CHECK_BATCH_PER_TICK = 100;
+const HEALTH_CHECK_BATCH_PER_TICK = 200;
 const HEALTH_CHECK_CUTOFF_MS = 4 * 60 * 60 * 1000; // 4h
 
 // Per-server "unhealthy" notification dedup. Key: serverId. Value: epoch ms of
@@ -932,6 +934,70 @@ export async function processSchedulerTick(): Promise<{
   let processed = 0, generated = 0, deployed = 0, purged = 0, backlinksPlaced = 0, ranksChecked = 0;
   let healthChecked = 0, healthDead = 0, healthAlive = 0;
 
+  // ── Idempotency lock (EDIT 2) ──
+  // Cron platforms (Railway, Vercel) sometimes fire overlapping ticks when a
+  // previous run is slow. Without a lock, two ticks pick up the same dueDomains
+  // and double-spend Claude tokens. tickLockUntil is a soft mutex: any tick
+  // that sees a future value returns early; the owner clears it on exit. The
+  // 10-min TTL is the crash safety net — if a tick dies before clearing, the
+  // lock auto-expires and the next cron call takes over.
+  const TICK_LOCK_MS = 10 * 60 * 1000;
+  if (config.tickLockUntil && config.tickLockUntil > now) {
+    console.log(`[scheduler] tick already in progress (lock until ${config.tickLockUntil.toISOString()}), skipping`);
+    return { processed: 0, generated: 0, deployed: 0, purged: 0, backlinksPlaced: 0, ranksChecked: 0, healthChecked: 0, healthDead: 0, healthAlive: 0, errors: ["locked"], perStrategySummary: {} };
+  }
+  try {
+    await prisma.schedulerConfig.update({
+      where: { id: config.id },
+      data: { tickLockUntil: new Date(now.getTime() + TICK_LOCK_MS) },
+    });
+  } catch (lockErr) {
+    console.warn("[scheduler] failed to claim tickLockUntil:", lockErr);
+  }
+
+  try {
+  // ── Abort-on-cap (EDIT 1) ──
+  // BudgetState is monthly (period=YYYY-MM, capCents default 30000=$300/mo).
+  // We don't have a daily column, so we derive a daily ceiling = capCents/30
+  // and compare against today's ApiUsage.costUsd sum. Asia/Jakarta day window:
+  // today_start = UTC midnight - 7h (WIB = UTC+7).
+  // If today already burned >= dailyCap, skip the article-gen loop entirely
+  // but still let health-check + milestones run (monitoring keeps working
+  // when budget is blown). Push "budget_cap_exceeded" into errors so the
+  // dashboard surfaces it.
+  let budgetCapExceeded = false;
+  try {
+    const currentPeriod = now.toISOString().slice(0, 7);
+    const budget = await prisma.budgetState.findUnique({ where: { period: currentPeriod } });
+    const monthlyCapCents = budget?.capCents ?? 30000;
+    const dailyCapCents = Math.floor(monthlyCapCents / 30);
+
+    // Asia/Jakarta day boundary: WIB = UTC+7, so a WIB day starts at
+    // 17:00 UTC the previous calendar day.
+    const jakartaOffsetMs = 7 * 60 * 60 * 1000;
+    const jakartaNow = new Date(now.getTime() + jakartaOffsetMs);
+    const jakartaMidnight = new Date(Date.UTC(
+      jakartaNow.getUTCFullYear(),
+      jakartaNow.getUTCMonth(),
+      jakartaNow.getUTCDate(),
+    ));
+    const todayStartUtc = new Date(jakartaMidnight.getTime() - jakartaOffsetMs);
+
+    const usageAgg = await prisma.apiUsage.aggregate({
+      _sum: { costUsd: true },
+      where: { createdAt: { gte: todayStartUtc } },
+    });
+    const spentTodayCents = Math.round((usageAgg._sum.costUsd ?? 0) * 100);
+    if (spentTodayCents >= dailyCapCents) {
+      budgetCapExceeded = true;
+      errors.push("budget_cap_exceeded");
+      console.warn(`[scheduler] budget cap exceeded — today ${spentTodayCents}c >= daily cap ${dailyCapCents}c (monthly ${monthlyCapCents}c / 30). Article-gen loop skipped; health-check + milestones still run.`);
+    }
+  } catch (budgetErr) {
+    // Don't block the tick on budget-check failure — log and continue.
+    console.warn("[scheduler] budget abort-check failed:", budgetErr);
+  }
+
   // Pre-load StrategyConfig rows once for the whole tick — used below to
   // attach per-domain strategy multipliers + override articlesPerWeek /
   // contentMode before the article-gen loop.
@@ -970,7 +1036,8 @@ export async function processSchedulerTick(): Promise<{
 
   // Find domains that are due (nextScheduled <= now)
   // Skip adult domains entirely — they should never reach the article-gen pipeline.
-  const dueDomains = await prisma.domainSchedule.findMany({
+  // When budgetCapExceeded, we skip the query entirely so the loop body short-circuits.
+  const dueDomains = budgetCapExceeded ? [] : await prisma.domainSchedule.findMany({
     where: {
       isActive: true,
       nextScheduled: { lte: now },
@@ -1150,8 +1217,25 @@ export async function processSchedulerTick(): Promise<{
   // ── After generation/deploy: distribute backlinks (anti-spam capped) ──
   // Respects daily limit + type priority (MS > MS 2 > LP > RTP > CN).
   // Safe to call every tick — does nothing if cap reached.
+  // Phase D: build perServerCapDaily map from this tick's domains (each domain's
+  // serverId → its strategy-adjusted daily cap) and pass it through so the
+  // distributor enforces per-server placement caps instead of just the global
+  // BacklinkConfig.maxPerServerPerDay × strategy.perServerCapMult.
+  const perServerCapDailyMap: Record<string, number> = {};
+  for (const schedule of dueDomains) {
+    const d = schedule.domain as { serverId?: string | null; strategy?: string };
+    const sid = d?.serverId;
+    if (!sid) continue;
+    const sKey = d.strategy || "whitehat";
+    const sCfg = strategyByKey[sKey] ?? WHITEHAT_DEFAULT;
+    const cap = Math.max(1, Math.round(baseServerCap * sCfg.perServerCapMult));
+    // Keep the strictest cap if multiple domains on the same server disagree.
+    const existing = perServerCapDailyMap[sid];
+    perServerCapDailyMap[sid] =
+      typeof existing === "number" ? Math.min(existing, cap) : cap;
+  }
   try {
-    const backlinkResult = await distributeBacklinks();
+    const backlinkResult = await distributeBacklinks(perServerCapDailyMap);
     backlinksPlaced = backlinkResult.placed;
     if (backlinksPlaced > 0) {
       console.log(`[Scheduler] Distributed ${backlinksPlaced} backlinks (${backlinkResult.remainingToday} left today)`);
@@ -1217,6 +1301,20 @@ export async function processSchedulerTick(): Promise<{
   }
 
   return { processed, generated, deployed, purged, backlinksPlaced, ranksChecked, healthChecked, healthDead, healthAlive, errors, perStrategySummary };
+  } finally {
+    // ── Release idempotency lock (EDIT 2) ──
+    // Always clear tickLockUntil so the next cron call can pick up, even if
+    // an unhandled throw escaped the tick body. If this update itself fails
+    // the 10-min TTL is the safety net.
+    try {
+      await prisma.schedulerConfig.update({
+        where: { id: config.id },
+        data: { tickLockUntil: null },
+      });
+    } catch (unlockErr) {
+      console.warn("[scheduler] failed to clear tickLockUntil:", unlockErr);
+    }
+  }
 }
 
 // Activate domains in the scheduler

@@ -14,6 +14,11 @@ export interface ImageContext {
   // 'stock_first' demotes editorial sources behind stock providers so a
   // blackhat domain renders clean stock photos instead of branded news shots.
   imageMode?: "rss_first" | "stock_first";
+  // Slot index for the picker — 0-indexed (slot 1 = 0, slot 2 = 1, …).
+  // Stock adapters (unsplash, pexels) use this as the API page number
+  // (slotIndex+1) so slot 2 doesn't repeat slot 1's top result. Other
+  // adapters ignore it.
+  slotIndex?: number;
 }
 
 export interface ImageResult {

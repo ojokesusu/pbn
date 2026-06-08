@@ -48,6 +48,7 @@ export async function GET() {
 
   try {
     const servers = await prisma.server.findMany({
+      where: { status: { not: "archived" } },
       include: { _count: { select: { domains: true } } },
       orderBy: { createdAt: "desc" },
     });

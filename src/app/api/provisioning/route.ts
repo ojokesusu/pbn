@@ -24,7 +24,7 @@ export async function GET() {
     activeBatchesRaw,
     recentTasksRaw,
   ] = await Promise.all([
-    prisma.server.count(),
+    prisma.server.count({ where: { status: { not: "archived" } } }),
     prisma.server.count({ where: { status: "active" } }),
     prisma.domain.count(),
     prisma.domain.count({
@@ -46,6 +46,7 @@ export async function GET() {
       },
     }),
     prisma.server.findMany({
+      where: { status: { not: "archived" } },
       select: {
         id: true,
         provider: true,

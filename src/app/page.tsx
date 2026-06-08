@@ -55,6 +55,7 @@ interface Stats {
   totalServers: number;
   totalBacklinks: number;
   deployedDomains: number;
+  everDeployed: number;
   aliveDomains: number;
   deadDomains: number;
   schedulerActive: number;
@@ -343,8 +344,10 @@ export default function Home() {
   }
 
   const deployedCount = stats?.deployedDomains ?? 0;
+  const aliveCount = stats?.aliveDomains ?? 0;
+  const everDeployedCount = stats?.everDeployed ?? deployedCount;
   const totalDomains = stats?.totalDomains ?? 0;
-  const readinessPercent = totalDomains > 0 ? Math.round((deployedCount / totalDomains) * 100) : 0;
+  const readinessPercent = totalDomains > 0 ? Math.round((aliveCount / totalDomains) * 100) : 0;
 
   const cardBase =
     "rounded-xl border border-[color:var(--border)] bg-white hover-lift animate-bounce-in";
@@ -675,17 +678,20 @@ export default function Home() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-semibold text-[color:var(--foreground)]">Kesiapan Deploy</h3>
-                <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">Domain yang sudah live</p>
+                <p className="text-xs text-[color:var(--muted-foreground)] mt-0.5">Domain yang sedang live sekarang</p>
               </div>
               <Activity className="size-4 text-[#0ea5e9]" />
             </div>
             <div className="flex items-center justify-center py-2">
-              <DonutChart percentage={loading ? 0 : readinessPercent} label="Deployed" />
+              <DonutChart percentage={loading ? 0 : readinessPercent} label="Live" />
             </div>
             <div className="grid grid-cols-2 gap-2 mt-3">
-              <div className="rounded-lg px-3 py-2" style={{ background: "rgba(14,165,233,0.06)" }}>
-                <p className="text-lg font-bold text-[#0ea5e9]">{loading ? "—" : deployedCount}</p>
-                <p className="text-[10px] text-[color:var(--muted-foreground)]">Domain live total</p>
+              <div className="rounded-lg px-3 py-2" style={{ background: "rgba(16,185,129,0.06)" }}>
+                <p className="text-lg font-bold text-[#10b981]">{loading ? "—" : aliveCount}</p>
+                <p className="text-[10px] text-[color:var(--muted-foreground)]">Live</p>
+                <p className="text-[9px] text-[color:var(--muted-foreground)] mt-0.5">
+                  Pernah deploy: {loading ? "—" : everDeployedCount}
+                </p>
                 {!loading && (stats?.todayDeploys ?? 0) > 0 && (
                   <p className="text-[9px] font-medium mt-0.5" style={{ color: "#10b981" }}>
                     +{stats?.todayDeploys} deploy hari ini
@@ -693,8 +699,8 @@ export default function Home() {
                 )}
               </div>
               <div className="rounded-lg px-3 py-2" style={{ background: "rgba(245,158,11,0.06)" }}>
-                <p className="text-lg font-bold text-[#f59e0b]">{loading ? "—" : totalDomains - deployedCount}</p>
-                <p className="text-[10px] text-[color:var(--muted-foreground)]">Belum deploy</p>
+                <p className="text-lg font-bold text-[#f59e0b]">{loading ? "—" : Math.max(0, everDeployedCount - aliveCount)}</p>
+                <p className="text-[10px] text-[color:var(--muted-foreground)]">Deploy turun</p>
               </div>
             </div>
           </div>

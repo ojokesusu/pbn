@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import {
+  getLiveCount,
+  getDeadCount,
+  getEverDeployedCount,
+  getDeployedTodayCount,
+} from "@/lib/domain-stats";
 
 export async function GET() {
   try {
@@ -33,15 +39,13 @@ export async function GET() {
       prisma.server.count(),
       prisma.server.count({ where: { status: "active", stack: { notIn: ["", "unmanaged"] } } }),
       prisma.backlink.count(),
-      prisma.domain.count({ where: { lastDeployed: { not: null } } }),
-      prisma.domain.count({ where: { isAlive: true, writeOff: false } }),
-      prisma.domain.count({ where: { isAlive: false, writeOff: false, lastChecked: { not: null } } }),
+      getEverDeployedCount(),
+      getLiveCount(),
+      getDeadCount(),
       prisma.domainSchedule.count({ where: { isActive: true } }),
       prisma.schedulerConfig.findFirst({ select: { isRunning: true } }),
       prisma.schedulerJob.count({ where: { createdAt: { gte: todayStart }, status: "success" } }),
-      prisma.schedulerJob.count({
-        where: { createdAt: { gte: todayStart }, status: "success", filesDeployed: { gt: 0 } },
-      }),
+      getDeployedTodayCount(),
       prisma.domain.count({ where: { indexStatus: "indexed" } }),
       prisma.backlinkPlacement.count({ where: { createdAt: { gte: todayStart } } }),
       prisma.backlinkPlacement.count(),
@@ -90,6 +94,7 @@ export async function GET() {
       healthyServers,
       totalBacklinks,
       deployedDomains,
+      everDeployed: deployedDomains,
       aliveDomains,
       deadDomains,
       schedulerActive,

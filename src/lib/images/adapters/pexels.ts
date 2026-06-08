@@ -24,9 +24,13 @@ export const pexelsAdapter: ImageAdapter = {
       return null
     }
 
+    // slotIndex (0-indexed) -> page (1-indexed). Lets the picker request
+    // a different page for slot 2 so we don't render the same photo twice.
+    const page = (ctx.slotIndex ?? 0) + 1
     const params = new URLSearchParams({
       query,
       per_page: '1',
+      page: String(page),
       orientation: 'landscape',
     })
     const url = `https://api.pexels.com/v1/search?${params.toString()}`

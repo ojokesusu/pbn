@@ -105,13 +105,19 @@ export async function pickImages(
   const usedKeys = new Set<string>();
 
   for (let i = 0; i < count; i++) {
+    // Per-slot ctx clone — stock adapters page off slotIndex so slot 2
+    // doesn't repeat slot 1's top result when only stocks are left.
+    const slotCtx: ImageContext = { ...ctx, slotIndex: i };
+
     // First pass: prefer an adapter we haven't used yet.
-    let hit = await tryChain(chain, ctx, usedKeys);
+    let hit = await tryChain(chain, slotCtx, usedKeys);
 
     // Fallback: allow repeats so we still fill the slot if all other
-    // adapters missed.
+    // adapters missed. slotIndex on slotCtx ensures the repeat adapter
+    // (typically Unsplash/Pexels) hits page N+1 instead of returning the
+    // same image as slot 1.
     if (!hit && usedKeys.size > 0) {
-      hit = await tryChain(chain, ctx, new Set());
+      hit = await tryChain(chain, slotCtx, new Set());
     }
 
     if (!hit) break;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { getLiveCount, getDeadCount, getEverDeployedCount } from "@/lib/domain-stats";
 
 export async function GET(request: NextRequest) {
   try {
@@ -175,9 +176,9 @@ export async function GET(request: NextRequest) {
       // the dashboard "493 / 43 alive / ..." numbers stay stable as the user
       // narrows the visible list.
       prisma.domain.count(),
-      prisma.domain.count({ where: { lastDeployed: { not: null } } }),
-      prisma.domain.count({ where: { isAlive: true, writeOff: false } }),
-      prisma.domain.count({ where: { isAlive: false, writeOff: false, lastChecked: { not: null } } }),
+      getEverDeployedCount(),
+      getLiveCount(),
+      getDeadCount(),
       prisma.domain.count({ where: { articles: { some: {} } } }),
       prisma.domain.count({ where: { theme: { is: { layoutName: "magazine" } } } }),
       prisma.domain.count({ where: { theme: { is: { layoutName: "blog" } } } }),
