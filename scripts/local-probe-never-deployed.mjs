@@ -8,6 +8,7 @@ import pg from "pg";
 const { Client } = pg;
 
 const DRY = process.argv.includes("--dry-run");
+const applyDnsWriteoff = process.argv.includes("--writeoff-dns");
 const limitArg = process.argv.find((a) => a.startsWith("--limit="));
 const LIMIT = limitArg ? parseInt(limitArg.split("=")[1], 10) : Infinity;
 
@@ -65,7 +66,7 @@ async function main() {
   const targets = await c.query(
     `SELECT id, url
      FROM "pbn"."Domain"
-     WHERE "isAlive" = false AND "isAdult" = false AND "lastDeployed" IS NULL
+     WHERE "isAlive" = false AND "isAdult" = false AND "writeOff" = false AND "lastDeployed" IS NULL
      ORDER BY id`,
   );
   const all = LIMIT === Infinity ? targets.rows : targets.rows.slice(0, LIMIT);
@@ -120,12 +121,36 @@ async function main() {
     }
   }
 
+  let dnsWriteOffCount = 0;
+  if (applyDnsWriteoff) {
+    const dnsDead = results.filter((r) => !r.ok && r.reason === "dns");
+    console.log(`\nWriting off ${dnsDead.length} DNS-dead (NXDOMAIN/EAI_AGAIN) never-deployed domains...`);
+    for (let i = 0; i < dnsDead.length; i += BATCH) {
+      const slice = dnsDead.slice(i, i + BATCH);
+      await c.query("BEGIN");
+      try {
+        for (const r of slice) {
+          await c.query(
+            `UPDATE "pbn"."Domain" SET "writeOff" = true, "lastChecked" = NOW() WHERE id = $1`,
+            [r.id],
+          );
+          dnsWriteOffCount++;
+        }
+        await c.query("COMMIT");
+      } catch (e) {
+        await c.query("ROLLBACK");
+        throw e;
+      }
+    }
+    console.log(`DNS writeOff'd: ${dnsWriteOffCount}`);
+  }
+
   const stats = await c.query(
     `SELECT
        COUNT(*) FILTER (WHERE "isAlive" = true)::int AS alive,
        COUNT(*) FILTER (WHERE "isAlive" = false)::int AS dead,
        COUNT(*)::int AS total
-     FROM "pbn"."Domain" WHERE "isAdult" = false`,
+     FROM "pbn"."Domain" WHERE "isAdult" = false AND "writeOff" = false`,
   );
   const { alive, dead, total } = stats.rows[0];
   console.log(`\nDONE. New stats: ${alive} alive / ${dead} dead / ${total} total = ${((alive/total)*100).toFixed(1)}% alive.`);
