@@ -4,11 +4,14 @@ import { prisma } from "@/lib/db";
 // GET /api/health-check/dead — list of all dead/unhealthy domains
 export async function GET() {
   try {
-    // Dead = was checked but isAlive=false
+    // Dead = was checked but isAlive=false, AND operator has not flagged it
+    // as a write-off (writeOff=true means the domain is intentionally
+    // abandoned — it should not pollute the "dead" rollup or trigger triage).
     const deadDomains = await prisma.domain.findMany({
       where: {
         lastChecked: { not: null },
         isAlive: false,
+        writeOff: false,
         NOT: { server: { status: "archived" } },
       },
       include: {

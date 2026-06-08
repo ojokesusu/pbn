@@ -47,12 +47,19 @@ export async function GET(request: NextRequest) {
     if (genre) where.genre = genre;
     if (deploy === "deployed") where.lastDeployed = { not: null };
     if (deploy === "not-deployed") where.lastDeployed = null;
-    if (health === "alive") where.isAlive = true;
+    if (health === "alive") {
+      where.isAlive = true;
+      where.writeOff = false;
+    }
     if (health === "dead") {
       where.isAlive = false;
+      where.writeOff = false;
       where.lastChecked = { not: null };
     }
-    if (health === "unchecked") where.lastChecked = null;
+    if (health === "unchecked") {
+      where.lastChecked = null;
+      where.writeOff = false;
+    }
     if (template === "none") where.theme = { is: { layoutName: null } };
     else if (template) where.theme = { is: { layoutName: template } };
     if (scheduler === "active") where.domainSchedule = { is: { isActive: true } };
@@ -169,8 +176,8 @@ export async function GET(request: NextRequest) {
       // narrows the visible list.
       prisma.domain.count(),
       prisma.domain.count({ where: { lastDeployed: { not: null } } }),
-      prisma.domain.count({ where: { isAlive: true } }),
-      prisma.domain.count({ where: { isAlive: false, lastChecked: { not: null } } }),
+      prisma.domain.count({ where: { isAlive: true, writeOff: false } }),
+      prisma.domain.count({ where: { isAlive: false, writeOff: false, lastChecked: { not: null } } }),
       prisma.domain.count({ where: { articles: { some: {} } } }),
       prisma.domain.count({ where: { theme: { is: { layoutName: "magazine" } } } }),
       prisma.domain.count({ where: { theme: { is: { layoutName: "blog" } } } }),

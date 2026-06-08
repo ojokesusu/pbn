@@ -25,6 +25,7 @@ model Server {
   tier            String   @default("")
   stack           String   @default("")
   domainCap       Int      @default(20)
+  maxDeploysPerDay Int     @default(6)
   lastHealthCheck DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -49,6 +50,7 @@ model Domain {
   themeId         String?
   lastDeployed    DateTime?
   isAlive         Boolean  @default(false)
+  writeOff        Boolean  @default(false)  // operator-marked write-off; excluded from inventory/health counts so dead/abandoned rows don't pollute totals
   httpStatus      Int      @default(0)
   hasWordPress    Boolean  @default(false)
   wpPostCount     Int      @default(0)
@@ -250,6 +252,8 @@ model SchedulerConfig {
   maxDomainsPerDay    Int      @default(15)
   contentMode         String   @default("pure_ai")
   hybridSourceLimit   Int      @default(3)
+  tickLockUntil       DateTime?
+  deployWorkerHeartbeatAt DateTime?
   updatedAt           DateTime @updatedAt
 
   @@schema("pbn")

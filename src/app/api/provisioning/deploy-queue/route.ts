@@ -179,10 +179,97 @@ export async function POST(request: Request) {
       );
       const allowedDomainIds = domainIds.filter((id) => domainServerMap.has(id));
 
+      // Phase D capacity gate: per-server domainCap enforcement.
+      // For every distinct resolved serverId we sum (Domain rows pointing at it)
+      // + (DeployQueueItem rows already queued/processing for it) and bail with
+      // 409 if that total already meets/exceeds Server.domainCap. We do this
+      // BEFORE any upsert so partial writes can't leak past the cap.
+      const resolvedPerDomain = new Map<string, string | null>();
+      for (const domainId of allowedDomainIds) {
+        resolvedPerDomain.set(
+          domainId,
+          serverId ?? domainServerMap.get(domainId) ?? null
+        );
+      }
+      const distinctServerIds = Array.from(
+        new Set(
+          Array.from(resolvedPerDomain.values()).filter(
+            (sid): sid is string => typeof sid === "string" && sid.length > 0
+          )
+        )
+      );
+      if (distinctServerIds.length > 0) {
+        // Phase F fix: previously we did `Domain.count + DeployQueueItem.count`
+        // which double-counted any domain that was BOTH already linked to the
+        // server (Domain.serverId = X) AND queued for it (DeployQueueItem with
+        // serverId = X) — the dashboard saw inflated "current" values (e.g.
+        // 80k on cap 20) when in fact the same domainIds appeared on both
+        // sides. Conceptually this mirrors the cartesian-fanout pattern you'd
+        // get from a LEFT JOIN Domain LEFT JOIN DeployQueueItem without
+        // aggregation; the fix is to count DISTINCT domainIds across the two
+        // sources. We fetch the id sets per server (cheap — bounded by cap)
+        // and union in JS so the result is a true headcount of unique domains
+        // bound to each server (live or pending), matching what we charge
+        // against domainCap.
+        const serverRows = await prisma.server.findMany({
+          where: { id: { in: distinctServerIds } },
+          select: {
+            id: true,
+            domainCap: true,
+          },
+        });
+        const linkedDomainRows = await prisma.domain.findMany({
+          where: {
+            serverId: { in: distinctServerIds },
+            writeOff: false,
+          },
+          select: { id: true, serverId: true },
+        });
+        const queuedDomainRows = await prisma.deployQueueItem.findMany({
+          where: {
+            serverId: { in: distinctServerIds },
+            status: { in: ["queued", "processing"] },
+          },
+          select: { domainId: true, serverId: true },
+        });
+        const distinctDomainsByServer = new Map<string, Set<string>>();
+        for (const sid of distinctServerIds) {
+          distinctDomainsByServer.set(sid, new Set<string>());
+        }
+        for (const d of linkedDomainRows) {
+          if (!d.serverId) continue;
+          distinctDomainsByServer.get(d.serverId)?.add(d.id);
+        }
+        for (const q of queuedDomainRows) {
+          if (!q.serverId) continue;
+          distinctDomainsByServer.get(q.serverId)?.add(q.domainId);
+        }
+        for (const srv of serverRows) {
+          const cap = srv.domainCap ?? 0;
+          const current = distinctDomainsByServer.get(srv.id)?.size ?? 0;
+          // How many of THIS request's domains would land on this server?
+          let incoming = 0;
+          for (const sid of resolvedPerDomain.values()) {
+            if (sid === srv.id) incoming += 1;
+          }
+          if (current + incoming > cap) {
+            return NextResponse.json(
+              {
+                error: "server_at_capacity",
+                serverId: srv.id,
+                current,
+                cap,
+              },
+              { status: 409 }
+            );
+          }
+        }
+      }
+
       await Promise.all(
         allowedDomainIds.map((domainId) => {
           const resolvedServerId =
-            serverId ?? domainServerMap.get(domainId) ?? null;
+            resolvedPerDomain.get(domainId) ?? null;
           return prisma.deployQueueItem.upsert({
             where: { domainId },
             update: {
@@ -216,15 +303,17 @@ export async function POST(request: Request) {
         },
       });
     } else if (action === "schedule") {
-      // Anti-spam pace planning: distribute queued unsched items over (count/12) days
-      // starting tomorrow morning 9am. ~12 per day (10-15/day band).
+      // Anti-spam pace planning: distribute queued unsched items per-server,
+      // each server respects its own Server.maxDeploysPerDay (fallback 12).
+      // Starts tomorrow 9am. Items without a serverId fall into a shared
+      // "_unassigned" bucket that uses the legacy 12/day flat pace.
       // Quarantine any adult items first so the schedule slots stay clean.
       await archiveAdultQueueItems();
-      const PER_DAY = 12;
+      const DEFAULT_PER_DAY = 12;
       const unscheduled = await prisma.deployQueueItem.findMany({
         where: { status: "queued", scheduledAt: null },
         orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
-        select: { id: true },
+        select: { id: true, serverId: true },
       });
 
       if (unscheduled.length > 0) {
@@ -239,22 +328,69 @@ export async function POST(request: Request) {
           0
         );
 
-        // Spread evenly within each day's 9am-9pm window (12 slots/day).
-        const SLOT_MINUTES = (12 * 60) / PER_DAY; // 60 min between slots
+        // Preload per-server maxDeploysPerDay for every distinct serverId in the
+        // unscheduled set. Servers without an explicit cap fall back to 12/day.
+        const distinctServerIds = Array.from(
+          new Set(
+            unscheduled
+              .map((i) => i.serverId)
+              .filter((s): s is string => typeof s === "string" && s.length > 0)
+          )
+        );
+        const serverRows =
+          distinctServerIds.length > 0
+            ? await prisma.server.findMany({
+                where: { id: { in: distinctServerIds } },
+                select: { id: true, maxDeploysPerDay: true },
+              })
+            : [];
+        const perDayByServer = new Map<string, number>(
+          serverRows.map((s) => [
+            s.id,
+            Math.max(
+              1,
+              (s as { maxDeploysPerDay?: number | null }).maxDeploysPerDay ??
+                DEFAULT_PER_DAY
+            ),
+          ])
+        );
 
-        await Promise.all(
-          unscheduled.map((item, idx) => {
-            const dayOffset = Math.floor(idx / PER_DAY);
-            const slot = idx % PER_DAY;
+        // Partition queue items by serverId — "_unassigned" for the null-serverId
+        // bucket. Insertion order preserves the priority/createdAt sort above.
+        const buckets = new Map<string, { id: string }[]>();
+        for (const item of unscheduled) {
+          const key = item.serverId ?? "_unassigned";
+          const bucket = buckets.get(key) ?? [];
+          bucket.push({ id: item.id });
+          buckets.set(key, bucket);
+        }
+
+        const updates: Promise<unknown>[] = [];
+        for (const [serverKey, bucket] of buckets.entries()) {
+          const perDay =
+            serverKey === "_unassigned"
+              ? DEFAULT_PER_DAY
+              : perDayByServer.get(serverKey) ?? DEFAULT_PER_DAY;
+          // Each bucket gets its own 9am-9pm window (12h). Slot minute width
+          // shrinks for denser servers so spread stays even within the day.
+          const slotMinutes = (12 * 60) / perDay;
+
+          bucket.forEach((item, idx) => {
+            const dayOffset = Math.floor(idx / perDay);
+            const slot = idx % perDay;
             const slotTime = new Date(tomorrow9am);
             slotTime.setDate(slotTime.getDate() + dayOffset);
-            slotTime.setMinutes(slotTime.getMinutes() + slot * SLOT_MINUTES);
-            return prisma.deployQueueItem.update({
-              where: { id: item.id },
-              data: { scheduledAt: slotTime },
-            });
-          })
-        );
+            slotTime.setMinutes(slotTime.getMinutes() + slot * slotMinutes);
+            updates.push(
+              prisma.deployQueueItem.update({
+                where: { id: item.id },
+                data: { scheduledAt: slotTime },
+              })
+            );
+          });
+        }
+
+        await Promise.all(updates);
       }
     } else {
       return NextResponse.json(
