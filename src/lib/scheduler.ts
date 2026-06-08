@@ -704,7 +704,7 @@ async function processRankCheckTick(
 // alive decision, no WP detection, no SSL probe). When Agent B's helper
 // lands, swap the inline checkAndUpdate body for the imported function — the
 // rest of this sub-tick (batching, gating, return shape) stays as-is.
-async function checkAndUpdate(domain: { id: string; url: string; lastDeployed?: Date | null }): Promise<{
+async function checkAndUpdate(domain: { id: string; url: string; lastDeployed?: Date | null; isAlive?: boolean; lastChecked?: Date | null }): Promise<{
   isAlive: boolean;
   httpStatus: number;
   responseMs: number;
@@ -761,7 +761,17 @@ async function checkAndUpdate(domain: { id: string; url: string; lastDeployed?: 
   const recentlyDeployed =
     !!domain.lastDeployed &&
     Date.now() - new Date(domain.lastDeployed).getTime() < DEPLOY_TRUST_WINDOW_MS;
-  const trustDeployOverProbe = networkLevelFail && recentlyDeployed;
+  // Extended trust: if a previous probe (local probe, triage script, manual) confirmed
+  // alive within the last 7 days AND current probe failed at network level (Railway
+  // egress unreachable), trust the prior alive signal. Without this, every HC sweep
+  // bleeds alive-flips back to dead because Railway US-East can't reach Indo VPS
+  // even when origin is fine.
+  const ALIVE_TRUST_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+  const recentlyAliveConfirmed =
+    domain.isAlive === true &&
+    !!domain.lastChecked &&
+    Date.now() - new Date(domain.lastChecked).getTime() < ALIVE_TRUST_WINDOW_MS;
+  const trustDeployOverProbe = networkLevelFail && (recentlyDeployed || recentlyAliveConfirmed);
 
   // Persist Domain row + DomainHealthLog row. Both writes share the same
   // checkedAt timestamp so a downstream join lines up cleanly.
@@ -816,10 +826,11 @@ async function processHealthCheckTick(
       OR: [{ lastChecked: null }, { lastChecked: { lt: cutoff } }],
       NOT: { server: { status: "archived" } },
     },
-    // lastDeployed pulled so checkAndUpdate can gate the flip-to-dead on a
-    // recent successful deploy (deploy worker SSH = stronger ground truth
-    // than a single Railway US-egress HTTP probe).
-    select: { id: true, url: true, lastDeployed: true },
+    // lastDeployed + isAlive + lastChecked pulled so checkAndUpdate can gate
+    // the flip-to-dead on (a) recent successful deploy OR (b) previously-confirmed
+    // alive within last 7d. Both signals trump a single Railway US-egress probe
+    // failure for Indo VPS.
+    select: { id: true, url: true, lastDeployed: true, isAlive: true, lastChecked: true },
     orderBy: [{ lastChecked: { sort: "asc", nulls: "first" } }],
     take: HEALTH_CHECK_BATCH_PER_TICK,
   });
