@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { generateSite } from "@/lib/generator";
 import { deployVisFtp } from "@/lib/ftp";
 import { submitToIndexNow } from "@/lib/google-ping";
+import { ensureThemeForDomain } from "@/lib/theme-engine";
 
 export interface DeployResult {
   domainId: string;
@@ -46,6 +47,13 @@ export async function deployDomain(domainId: string): Promise<DeployResult> {
       error: "adult_quarantine",
       durationMs: Date.now() - start,
     };
+  }
+
+  // Belt-and-braces guard: if the domain still has no theme (legacy / freshly
+  // provisioned), spin one up now so generateSite() never crashes on a null
+  // theme.id. Idempotent — no-op when themeId already set.
+  if (!domain.themeId) {
+    await ensureThemeForDomain(domain.id, domain.genre, "deploy");
   }
 
   // Create deploy log entry

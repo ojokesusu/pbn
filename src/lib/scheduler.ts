@@ -6,12 +6,11 @@ import { prisma } from "./db";
 import { generateArticleWithClaude, generateBackdates } from "./anthropic";
 import type { ArticleSourceContext } from "./anthropic";
 import { deployDomain } from "./deploy";
-import { generateUniqueThemeForGenre } from "./theme-engine";
+import { ensureThemeForDomain } from "./theme-engine";
 import { findZoneByName } from "./cloudflare";
 import { submitToIndexNow } from "./google-ping";
 import { distributeBacklinks } from "./backlink-distributor";
 import { notify, checkMilestones } from "./notifications";
-import { pollinationsFromGenre } from "./pollinations";
 import { fetchNews, fetchFromActiveSources, fetchArticleFull } from "./rss-scraper";
 import { fetchFromActiveContentSources } from "./content-sources";
 import { pickImages } from "./images";
@@ -85,44 +84,21 @@ async function fetchPexelsImage(genre: string): Promise<string> {
   return `https://picsum.photos/seed/${Math.floor(Math.random() * 800) + 100}/1200/630`;
 }
 
-// Unified image fetcher — picks between Pexels (stock) and Pollinations (AI).
-// iGaming always uses Pollinations (unique per-article AI image; stylized
-// neon/casino aesthetic fits the genre).
-// Other genres: Pexels only — per Sandi rule 2026-06-04, Pollinations is
-// reserved for iGaming because AI images "keliatan banget AI-nya" and kill
-// credibility on news/lifestyle articles.
-async function fetchArticleImage(genre: string, title?: string): Promise<string> {
-  if (genre === "iGaming") {
-    return pollinationsFromGenre(genre, title);
-  }
+// Unified image fetcher — Pexels for every genre.
+// Pollinations was iGaming-exclusive but turned paid-only 2026-06-06 (HTTP 402),
+// so iGaming now falls back to Pexels with iGaming keywords. Per memory there
+// are 0 iGaming domains in production, so this baseline is acceptable.
+async function fetchArticleImage(genre: string, _title?: string): Promise<string> {
   return fetchPexelsImage(genre);
 }
 
-// For iGaming articles, inject 2-3 extra Pollinations images after <h2> sections
-// so the rendered page feels image-heavy and visually rich (client request).
-// Non-iGaming genres pass through unchanged.
-function injectExtraImages(content: string, genre: string, title: string): string {
-  if (genre !== "iGaming") return content;
-
-  const h2Positions: number[] = [];
-  const h2Regex = /<\/h2>/gi;
-  let match;
-  while ((match = h2Regex.exec(content)) !== null) {
-    h2Positions.push(match.index + match[0].length);
-  }
-  if (h2Positions.length === 0) return content;
-
-  // Insert up to 3 images, one after each of the first 3 h2 closing tags
-  const injectCount = Math.min(3, h2Positions.length);
-  let result = content;
-  for (let i = injectCount - 1; i >= 0; i--) {
-    const pos = h2Positions[i];
-    const seed = Math.floor(Math.random() * 1_000_000);
-    const url = pollinationsFromGenre("iGaming", `${title} section ${i + 1}`, { seed });
-    const imgTag = `\n<figure style="margin:2rem 0;text-align:center;"><img src="${url}" alt="${title}" loading="lazy" style="max-width:100%;height:auto;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);" /></figure>\n`;
-    result = result.slice(0, pos) + imgTag + result.slice(pos);
-  }
-  return result;
+// For iGaming articles we used to inject 2-3 extra Pollinations images after
+// <h2> sections. The Pollinations service turned paid-only 2026-06-06 (HTTP
+// 402) and was the only AI image source we had, so this is now a no-op.
+// pickImages() in the main flow still supplies header + mid-body images via
+// Pexels/Unsplash, so the rendered article is not image-less.
+function injectExtraImages(content: string, _genre: string, _title: string): string {
+  return content;
 }
 
 // Inject a <figure> with image into the body HTML at the midpoint —
@@ -415,24 +391,9 @@ export async function initialDomainSetup(
   const hybridLimit = cfg.hybridSourceLimit ?? 3;
 
   try {
-    // 1. Generate theme if needed
+    // 1. Generate theme if needed (race-safe; idempotent when themeId already set).
     if (!domain.themeId) {
-      const fresh = generateUniqueThemeForGenre(genre, Date.now() + Math.random() * 10000);
-      const theme = await prisma.theme.create({
-        data: {
-          name: `Auto - ${fresh.layoutName} - ${genre} (${fresh.cssPrefix})`,
-          templateName: fresh.layoutName, layoutName: fresh.layoutName,
-          cssPrefix: fresh.cssPrefix, primaryColor: fresh.primaryColor,
-          secondaryColor: fresh.secondaryColor, accentColor: fresh.accentColor,
-          bgColor: fresh.bgColor, textColor: fresh.textColor,
-          fontFamily: fresh.fontFamily, headingFont: fresh.headingFont,
-          borderRadius: fresh.borderRadius, shadowStyle: fresh.shadowStyle,
-          spacingScale: fresh.spacingScale, containerWidth: fresh.containerWidth,
-          headerStyle: fresh.headerStyle, footerStyle: fresh.footerStyle,
-          generatedCss: fresh.generatedCss, isGenerated: true,
-        },
-      });
-      await prisma.domain.update({ where: { id: domainId }, data: { themeId: theme.id } });
+      await ensureThemeForDomain(domainId, genre, "scheduler");
     }
 
     // 2. Create categories
@@ -741,7 +702,7 @@ async function processRankCheckTick(
 // alive decision, no WP detection, no SSL probe). When Agent B's helper
 // lands, swap the inline checkAndUpdate body for the imported function — the
 // rest of this sub-tick (batching, gating, return shape) stays as-is.
-async function checkAndUpdate(domain: { id: string; url: string }): Promise<{
+async function checkAndUpdate(domain: { id: string; url: string; lastDeployed?: Date | null }): Promise<{
   isAlive: boolean;
   httpStatus: number;
   responseMs: number;
@@ -778,16 +739,41 @@ async function checkAndUpdate(domain: { id: string; url: string }): Promise<{
 
   const responseMs = Date.now() - start;
 
+  // ── Deploy-wins guard ──────────────────────────────────────────────────
+  // Railway US-East egress can't reliably reach Indonesian/EU PBN VPS, so a
+  // single failed probe is weaker evidence than a recent deploy worker SSH
+  // success. If the worker wrote files within the last 72h AND this probe
+  // failed with a network-level / WAF / 5xx error, we refuse to flip
+  // isAlive=false. We still update lastChecked + httpStatus + write the
+  // health log so the operator can see the probe attempt — we just don't
+  // overwrite the deploy worker's ground truth on isAlive.
+  const DEPLOY_TRUST_WINDOW_MS = 72 * 60 * 60 * 1000;
+  const networkLevelFail =
+    !isAlive &&
+    (errorReason === "timeout" ||
+      errorReason === "dns" ||
+      errorReason === "conn_refused" ||
+      errorReason === "fetch_error" ||
+      httpStatus === 403 ||
+      httpStatus >= 500);
+  const recentlyDeployed =
+    !!domain.lastDeployed &&
+    Date.now() - new Date(domain.lastDeployed).getTime() < DEPLOY_TRUST_WINDOW_MS;
+  const trustDeployOverProbe = networkLevelFail && recentlyDeployed;
+
   // Persist Domain row + DomainHealthLog row. Both writes share the same
   // checkedAt timestamp so a downstream join lines up cleanly.
   const checkedAt = new Date();
+  const domainUpdateData: { isAlive?: boolean; httpStatus: number; lastChecked: Date } = {
+    httpStatus,
+    lastChecked: checkedAt,
+  };
+  if (!trustDeployOverProbe) {
+    domainUpdateData.isAlive = isAlive;
+  }
   await prisma.domain.update({
     where: { id: domain.id },
-    data: {
-      isAlive,
-      httpStatus,
-      lastChecked: checkedAt,
-    },
+    data: domainUpdateData,
   });
   try {
     await prisma.domainHealthLog.create({
@@ -828,7 +814,10 @@ async function processHealthCheckTick(
       OR: [{ lastChecked: null }, { lastChecked: { lt: cutoff } }],
       NOT: { server: { status: "archived" } },
     },
-    select: { id: true, url: true },
+    // lastDeployed pulled so checkAndUpdate can gate the flip-to-dead on a
+    // recent successful deploy (deploy worker SSH = stronger ground truth
+    // than a single Railway US-egress HTTP probe).
+    select: { id: true, url: true, lastDeployed: true },
     orderBy: [{ lastChecked: { sort: "asc", nulls: "first" } }],
     take: HEALTH_CHECK_BATCH_PER_TICK,
   });

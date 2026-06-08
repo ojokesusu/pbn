@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { generateUniqueThemeForGenre } from "@/lib/theme-engine";
+import { ensureThemeForDomain } from "@/lib/theme-engine";
 
 // ── WordPress REST API Scraper ──
 
@@ -172,44 +172,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Domain tidak ditemukan" }, { status: 404 });
     }
 
-    // ── Step 5: Auto-generate theme if domain has none ──
-    let themeId = domain.themeId;
-    if (!themeId) {
-      const genre = domain.genre || "Teknologi";
-      const generated = generateUniqueThemeForGenre(genre, Date.now());
-      const themeName = `WP Import - ${generated.layoutName} - ${genre} (${generated.cssPrefix})`;
-
-      const theme = await prisma.theme.create({
-        data: {
-          name: themeName,
-          templateName: generated.layoutName,
-          layoutName: generated.layoutName,
-          cssPrefix: generated.cssPrefix,
-          primaryColor: generated.primaryColor,
-          secondaryColor: generated.secondaryColor,
-          accentColor: generated.accentColor,
-          bgColor: generated.bgColor,
-          textColor: generated.textColor,
-          fontFamily: generated.fontFamily,
-          headingFont: generated.headingFont,
-          borderRadius: generated.borderRadius,
-          shadowStyle: generated.shadowStyle,
-          spacingScale: generated.spacingScale,
-          containerWidth: generated.containerWidth,
-          headerStyle: generated.headerStyle,
-          footerStyle: generated.footerStyle,
-          generatedCss: generated.generatedCss,
-          isGenerated: true,
-        },
-      });
-
-      themeId = theme.id;
-
-      // Assign theme to domain
-      await prisma.domain.update({
-        where: { id: domainId },
-        data: { themeId },
-      });
+    // ── Step 5: Auto-generate theme if domain has none (race-safe via shared helper) ──
+    if (!domain.themeId) {
+      await ensureThemeForDomain(domainId, domain.genre, "wp-import");
     }
 
     // ── Step 6: Create categories in DB ──

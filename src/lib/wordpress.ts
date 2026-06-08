@@ -2,7 +2,7 @@
 // Used by both single import and bulk import
 
 import { prisma } from "@/lib/db";
-import { generateUniqueThemeForGenre } from "@/lib/theme-engine";
+import { ensureThemeForDomain } from "@/lib/theme-engine";
 
 export interface WpPost {
   id: number;
@@ -210,39 +210,10 @@ export async function importWordPressForDomain(
     // Pick best N
     const selectedPosts = pickBestArticles(allPosts, siteUrl, backlinkTargets, maxArticles);
 
-    // Auto-generate theme if domain has none
+    // Auto-generate theme if domain has none (race-safe via shared helper).
     let themeGenerated = false;
-    let themeId = domain.themeId;
-    if (!themeId) {
-      const genre = domain.genre || "Teknologi";
-      const generated = generateUniqueThemeForGenre(genre, Date.now() + Math.random() * 1000);
-      const themeName = `WP Bulk - ${generated.layoutName} - ${genre} (${generated.cssPrefix})`;
-
-      const theme = await prisma.theme.create({
-        data: {
-          name: themeName,
-          templateName: generated.layoutName,
-          layoutName: generated.layoutName,
-          cssPrefix: generated.cssPrefix,
-          primaryColor: generated.primaryColor,
-          secondaryColor: generated.secondaryColor,
-          accentColor: generated.accentColor,
-          bgColor: generated.bgColor,
-          textColor: generated.textColor,
-          fontFamily: generated.fontFamily,
-          headingFont: generated.headingFont,
-          borderRadius: generated.borderRadius,
-          shadowStyle: generated.shadowStyle,
-          spacingScale: generated.spacingScale,
-          containerWidth: generated.containerWidth,
-          headerStyle: generated.headerStyle,
-          footerStyle: generated.footerStyle,
-          generatedCss: generated.generatedCss,
-          isGenerated: true,
-        },
-      });
-      themeId = theme.id;
-      await prisma.domain.update({ where: { id: domainId }, data: { themeId } });
+    if (!domain.themeId) {
+      await ensureThemeForDomain(domainId, domain.genre, "wp-bulk");
       themeGenerated = true;
     }
 

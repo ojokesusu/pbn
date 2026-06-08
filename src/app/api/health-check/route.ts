@@ -281,7 +281,7 @@ export async function POST(request: NextRequest) {
       filter?: "dead" | "deployed" | "suspect";
     };
 
-    let domains: Array<{ id: string; url: string; isAlive: boolean; firstFailureAt: Date | null; avgResponseMs: number }>;
+    let domains: Array<{ id: string; url: string; isAlive: boolean; firstFailureAt: Date | null; avgResponseMs: number; lastDeployed: Date | null }>;
 
     const selectShape = {
       id: true,
@@ -289,6 +289,11 @@ export async function POST(request: NextRequest) {
       isAlive: true,
       firstFailureAt: true,
       avgResponseMs: true,
+      // lastDeployed read so the writer below can refuse to flip isAlive=false
+      // on domains that the deploy worker successfully wrote to within 72h —
+      // Railway US-East egress can't reach most Indo/EU PBN VPS, so a single
+      // failed probe is weaker evidence than a fresh SSH-confirmed deploy.
+      lastDeployed: true,
     } as const;
 
     if (domainId) {
@@ -397,8 +402,28 @@ export async function POST(request: NextRequest) {
         sslExpiresAt = undefined; // do not overwrite when not measured
       }
 
+      // ── Deploy-wins guard ────────────────────────────────────────────
+      // A fresh deploy worker SSH success is a stronger ground truth than a
+      // single Railway HTTP probe. If the probe failed with a network-level
+      // / WAF / 5xx error AND the worker wrote files within the last 72h,
+      // we omit isAlive from the update (and skip firstFailureAt churn) so
+      // recalibration is not silently wiped by an unreachable-egress probe.
+      const DEPLOY_TRUST_WINDOW_MS = 72 * 60 * 60 * 1000;
+      const probeFailedNetwork =
+        !check.isAlive &&
+        (check.errorReason === "timeout" ||
+          check.errorReason === "dns" ||
+          check.errorReason === "waf_block" ||
+          check.errorReason === "http_5xx" ||
+          check.errorReason === "unknown" ||
+          check.httpStatus === 403 ||
+          check.httpStatus >= 500);
+      const recentlyDeployed =
+        !!prev.lastDeployed &&
+        Date.now() - new Date(prev.lastDeployed).getTime() < DEPLOY_TRUST_WINDOW_MS;
+      const trustDeployOverProbe = probeFailedNetwork && recentlyDeployed;
+
       const updateData: Record<string, unknown> = {
-        isAlive: check.isAlive,
         httpStatus: check.httpStatus,
         hasWordPress: check.hasWordPress,
         wpPostCount: check.wpPostCount,
@@ -406,7 +431,10 @@ export async function POST(request: NextRequest) {
         avgResponseMs: newAvg,
         sslDaysLeft: check.sslDaysLeft,
       };
-      if (firstFailureAt !== undefined) updateData.firstFailureAt = firstFailureAt;
+      if (!trustDeployOverProbe) {
+        updateData.isAlive = check.isAlive;
+        if (firstFailureAt !== undefined) updateData.firstFailureAt = firstFailureAt;
+      }
       if (sslExpiresAt !== undefined) updateData.sslExpiresAt = sslExpiresAt;
       if (check.wpVersion) updateData.wpVersion = check.wpVersion;
       if (check.errorReason === "waf_block") updateData.lastWafBlock = checkedAt;

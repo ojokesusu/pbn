@@ -4,6 +4,7 @@
 // and producing complete CSS. Seed-based for deterministic reproduction.
 // ============================================================================
 
+import { prisma } from "./db";
 import { generateNewLayoutCss } from "./theme-layouts";
 
 // ---------------------------------------------------------------------------
@@ -382,3 +383,86 @@ export function generateCssForLayout(
   return generateNewLayoutCss(layoutName, prefix, params);
 }
 
+// ---------------------------------------------------------------------------
+// ensureThemeForDomain — single source of truth for per-domain theme creation.
+//
+// Behavior:
+//   1. Re-read the domain inside the function (the caller's `domain.themeId`
+//      may be stale by the time this runs).
+//   2. If the domain already has a theme, return its id (idempotent).
+//   3. Otherwise: generate a genre-aware theme, create the Theme row, then
+//      run a conditional `updateMany` on Domain with `themeId: null` as a
+//      guard. If `count === 0` it means a concurrent caller already attached
+//      a theme — delete our orphan theme and return the existing themeId.
+//
+// `source` is a short label baked into the Theme.name so we can see in the
+// DB which callsite created it ("scheduler", "wp-import", "ai-bulk", ...).
+// Defaults to "auto" for callers that don't care.
+// ---------------------------------------------------------------------------
+
+export async function ensureThemeForDomain(
+  domainId: string,
+  genre?: string | null,
+  source: string = "auto",
+): Promise<string> {
+  // Step 1 — read current state. If theme already set, return early.
+  const current = await prisma.domain.findUnique({
+    where: { id: domainId },
+    select: { themeId: true, genre: true },
+  });
+  if (!current) {
+    throw new Error(`ensureThemeForDomain: domain ${domainId} not found`);
+  }
+  if (current.themeId) return current.themeId;
+
+  const effectiveGenre = (genre ?? current.genre ?? "").trim() || "Berita";
+
+  // Step 2 — generate + create the theme row.
+  const fresh = generateUniqueThemeForGenre(
+    effectiveGenre,
+    Date.now() + Math.random() * 10000,
+  );
+  const theme = await prisma.theme.create({
+    data: {
+      name: `${source} - ${fresh.layoutName} - ${effectiveGenre} (${fresh.cssPrefix})`,
+      templateName: fresh.layoutName,
+      layoutName: fresh.layoutName,
+      cssPrefix: fresh.cssPrefix,
+      primaryColor: fresh.primaryColor,
+      secondaryColor: fresh.secondaryColor,
+      accentColor: fresh.accentColor,
+      bgColor: fresh.bgColor,
+      textColor: fresh.textColor,
+      fontFamily: fresh.fontFamily,
+      headingFont: fresh.headingFont,
+      borderRadius: fresh.borderRadius,
+      shadowStyle: fresh.shadowStyle,
+      spacingScale: fresh.spacingScale,
+      containerWidth: fresh.containerWidth,
+      headerStyle: fresh.headerStyle,
+      footerStyle: fresh.footerStyle,
+      generatedCss: fresh.generatedCss,
+      isGenerated: true,
+    },
+  });
+
+  // Step 3 — conditional attach. updateMany lets us include `themeId: null`
+  // in the WHERE clause so a racing caller can't double-attach.
+  const result = await prisma.domain.updateMany({
+    where: { id: domainId, themeId: null },
+    data: { themeId: theme.id },
+  });
+
+  if (result.count === 0) {
+    // Someone beat us to it — clean up our orphan and return the winner.
+    await prisma.theme.delete({ where: { id: theme.id } }).catch(() => {});
+    const winner = await prisma.domain.findUnique({
+      where: { id: domainId },
+      select: { themeId: true },
+    });
+    if (winner?.themeId) return winner.themeId;
+    throw new Error(`ensureThemeForDomain: race lost but no themeId set for ${domainId}`);
+  }
+
+  return theme.id;
+}
