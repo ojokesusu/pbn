@@ -145,8 +145,14 @@ async function doDeployFtp(
   let lastError: string = "";
 
   for (let connAttempt = 1; connAttempt <= maxConnectionRetries; connAttempt++) {
-    const client = new ftp.Client(45000); // 45s idle timeout
+    // 90s idle timeout — Rumahweb shared hosting PASV handshake can stall longer
+    // than the previous 45s on the first attempt right after AddSite provisioning.
+    // allowSeparateTransferHost lets the data connection land on whatever IP the
+    // PASV response advertises (some shared hosts return a different LB backend
+    // for data) instead of forcing the control-host IP, which can drop traffic.
+    const client = new ftp.Client(90000);
     client.ftp.verbose = false;
+    (client as unknown as { _ftpOptions?: { allowSeparateTransferHost?: boolean } })._ftpOptions = { allowSeparateTransferHost: true };
 
     try {
       await connect(client, config);
@@ -179,12 +185,32 @@ async function doDeployFtp(
     } catch (err) {
       lastError = err instanceof Error ? err.message : "Unknown FTP error";
       try { client.close(); } catch {}
-      // If passive mode timeout, retry the whole connection
-      if (connAttempt < maxConnectionRetries && (lastError.includes("ETIMEDOUT") || lastError.includes("ECONNRESET"))) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        continue;
+
+      // Classify so we know whether to retry and how to tag the final error.
+      const isControlTimeout = /Timeout \(control socket\)|Timeout \(data socket\)|Timeout when trying to open data connection/i.test(lastError);
+      const isNetworkDrop = lastError.includes("ETIMEDOUT") || lastError.includes("ECONNRESET") || lastError.includes("EPIPE") || lastError.includes("ECONNREFUSED");
+      const is530Auth = /530\b/.test(lastError) || /Login authentication failed/i.test(lastError);
+      const isTlsErr = /TLS|certificate|SSL|wrong version number/i.test(lastError);
+
+      if (connAttempt < maxConnectionRetries) {
+        if (isControlTimeout || isNetworkDrop) {
+          // PASV / NAT path stall — back off briefly and reconnect.
+          await new Promise(resolve => setTimeout(resolve, 2500));
+          continue;
+        }
+        if (is530Auth) {
+          // Right after AddSite, cPanel can take a few seconds to push the new
+          // FTP user into PAM. 6s sleep covers the propagation window observed
+          // in the 2026-06-07 16:37–17:08 UTC Rumahweb cluster (3 servers all
+          // recovered to non-530 on the next cycle).
+          await new Promise(resolve => setTimeout(resolve, 6000));
+          continue;
+        }
       }
-      return { success: false, filesUploaded: 0, error: lastError };
+
+      // Tag the final error for fast triage in deploy-error-diagnose.
+      const tag = is530Auth ? "[AUTH]" : isTlsErr ? "[TLS]" : (isControlTimeout || isNetworkDrop) ? "[NET]" : "[FTP]";
+      return { success: false, filesUploaded: 0, error: `${tag} ${lastError}` };
     }
   }
 
