@@ -10,6 +10,7 @@ export async function GET() {
 
   try {
     const servers = await prisma.server.findMany({
+      where: { status: { not: "archived" } },
       select: {
         id: true,
         label: true,

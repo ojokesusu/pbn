@@ -58,11 +58,12 @@ export default function CapacityChart({ capacity }: Props) {
     available: Math.max(0, t.slot - t.used),
   }));
 
-  const providerData = (capacity.byProvider ?? []).map((p) => ({
-    provider: p.provider,
-    slot: p.slot,
-    used: p.used,
-  }));
+  const providerData = (capacity.byProvider ?? [])
+    .filter((p) => p.provider !== "seekahost-legacy" && p.used > 0)
+    .map((p) => ({
+      provider: p.provider,
+      domains: p.used,
+    }));
 
   return (
     <div className="space-y-6">
@@ -182,7 +183,7 @@ export default function CapacityChart({ capacity }: Props) {
               <PieChart>
                 <Pie
                   data={providerData}
-                  dataKey="slot"
+                  dataKey="domains"
                   nameKey="provider"
                   cx="50%"
                   cy="50%"
@@ -203,6 +204,17 @@ export default function CapacityChart({ capacity }: Props) {
               </PieChart>
             </ResponsiveContainer>
           </div>
+          {(() => {
+            const legacy = capacity.byProvider?.find(
+              (p) => p.provider === "seekahost-legacy"
+            );
+            if (!legacy || legacy.used === 0) return null;
+            return (
+              <p className="text-xs text-muted-foreground mt-3">
+                {legacy.used} domain masih nyangkut di {legacy.servers} server seekahost-legacy (sisa migrasi dari SeekaHost, lagi dibersihin).
+              </p>
+            );
+          })()}
         </CardContent>
       </Card>
     </div>

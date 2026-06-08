@@ -12,6 +12,7 @@ export async function GET() {
   try {
     // Fetch every server with its single most-recent HealthCheck
     const servers = await prisma.server.findMany({
+      where: { status: { not: "archived" } },
       include: {
         healthChecks: {
           orderBy: { checkedAt: "desc" },

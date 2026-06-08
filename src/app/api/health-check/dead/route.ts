@@ -9,6 +9,7 @@ export async function GET() {
       where: {
         lastChecked: { not: null },
         isAlive: false,
+        NOT: { server: { status: "archived" } },
       },
       include: {
         server: { select: { id: true, name: true, host: true } },

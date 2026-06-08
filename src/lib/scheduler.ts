@@ -826,6 +826,7 @@ async function processHealthCheckTick(
     where: {
       isAdult: false,
       OR: [{ lastChecked: null }, { lastChecked: { lt: cutoff } }],
+      NOT: { server: { status: "archived" } },
     },
     select: { id: true, url: true },
     orderBy: [{ lastChecked: { sort: "asc", nulls: "first" } }],
@@ -875,6 +876,7 @@ async function processHealthCheckTick(
 async function processServerHealthRollup(now: Date): Promise<{ alertsFired: number }> {
   let alertsFired = 0;
   const servers = await prisma.server.findMany({
+    where: { status: { not: "archived" } },
     select: {
       id: true,
       name: true,

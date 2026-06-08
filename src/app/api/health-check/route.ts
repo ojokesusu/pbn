@@ -300,7 +300,11 @@ export async function POST(request: NextRequest) {
       domains = [d];
     } else if (filter === "dead") {
       domains = await prisma.domain.findMany({
-        where: { isAlive: false, lastChecked: { not: null } },
+        where: {
+          isAlive: false,
+          lastChecked: { not: null },
+          NOT: { server: { status: "archived" } },
+        },
         select: selectShape,
         orderBy: { lastChecked: "asc" },
         take: limit || undefined,
@@ -308,7 +312,10 @@ export async function POST(request: NextRequest) {
       });
     } else if (filter === "deployed") {
       domains = await prisma.domain.findMany({
-        where: { lastDeployed: { not: null } },
+        where: {
+          lastDeployed: { not: null },
+          NOT: { server: { status: "archived" } },
+        },
         select: selectShape,
         orderBy: { lastChecked: { sort: "asc", nulls: "first" } },
         take: limit || undefined,
@@ -324,6 +331,7 @@ export async function POST(request: NextRequest) {
           isAlive: false,
           isAdult: false,
           lastDeployed: { gte: threeDaysAgo },
+          NOT: { server: { status: "archived" } },
         },
         select: selectShape,
         orderBy: { lastDeployed: "desc" },
@@ -332,6 +340,7 @@ export async function POST(request: NextRequest) {
       });
     } else if (all) {
       domains = await prisma.domain.findMany({
+        where: { NOT: { server: { status: "archived" } } },
         select: selectShape,
         orderBy: { createdAt: "asc" },
         take: limit || undefined,
@@ -471,7 +480,10 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   try {
     const domains = await prisma.domain.findMany({
-      where: { isAdult: false },
+      where: {
+        isAdult: false,
+        NOT: { server: { status: "archived" } },
+      },
       select: {
         id: true,
         isAlive: true,
