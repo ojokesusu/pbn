@@ -199,6 +199,20 @@ export async function POST(request: Request) {
         )
       );
       if (distinctServerIds.length > 0) {
+        // Quarantine gate: reject if any resolved server is quarantined/archived
+        // BEFORE the capacity check so we never even count slots on a dead box.
+        const quarantineRows = await prisma.server.findMany({
+          where: { id: { in: distinctServerIds } },
+          select: { id: true, status: true },
+        });
+        for (const srv of quarantineRows) {
+          if (srv.status === "quarantined" || srv.status === "archived") {
+            return NextResponse.json(
+              { error: "server_quarantined", serverId: srv.id },
+              { status: 409 }
+            );
+          }
+        }
         // Phase F fix: previously we did `Domain.count + DeployQueueItem.count`
         // which double-counted any domain that was BOTH already linked to the
         // server (Domain.serverId = X) AND queued for it (DeployQueueItem with
