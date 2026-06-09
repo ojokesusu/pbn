@@ -9,6 +9,7 @@ import { AppHeader } from "@/components/layout/app-header"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import ServerDiagnosePanel from "@/components/health/server-diagnose-panel"
 
 interface Stats {
   total: number
@@ -614,6 +615,9 @@ export default function HealthCheckPage() {
             </div>
           </div>
         )}
+
+        {/* === Server Diagnose & Auto-Fix === */}
+        <ServerDiagnosePanel />
 
         {/* === Server Roll-Up — moved to BOTTOM of page (UX: utama atas, info bawah).
             Render lokasi awal disuppress via `false &&`. Canonical render-nya
