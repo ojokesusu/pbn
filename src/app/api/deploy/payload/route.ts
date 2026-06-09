@@ -34,7 +34,6 @@ export async function POST(req: NextRequest) {
         isAdult: true,
         themeId: true,
         genre: true,
-        server: { select: { stack: true, host: true } },
       },
     });
     if (!domain) {
@@ -51,19 +50,15 @@ export async function POST(req: NextRequest) {
     const { files } = await generateSite(domain.id);
 
     const domainHost = (domain.url || domain.name || "").replace(/^https?:\/\//, "").replace(/\/+$/, "").toLowerCase();
-    const stack = (domain.server?.stack ?? "").toLowerCase();
 
-    // bare_ols docroot is /www/wwwroot/<domain>. Other stacks the worker
-    // shouldn't be calling this endpoint, but we still emit a remotePath
-    // so debugging is easier.
-    const remotePath = stack === "bare_ols" ? `/www/wwwroot/${domainHost}` : `/${domainHost}`;
-
+    // NOTE: caller (deploy_worker.py) chooses the remotePath based on the
+    // RESOLVED queue-item server's stack, NOT Domain.serverId — which can be
+    // stale (e.g. pointing at archived legacy server). We only return files +
+    // domainHost; the worker constructs the path.
     return NextResponse.json({
       ok: true,
       domainId: domain.id,
       domainHost,
-      stack,
-      remotePath,
       fileCount: files.length,
       files,
     });
