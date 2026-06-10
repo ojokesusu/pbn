@@ -29,7 +29,9 @@ const BATCH = batchArg ? parseInt(batchArg.split("=")[1], 10) : 50;
 // Pacing — Unsplash demo tier is 50/hour. ~75s between calls keeps us well
 // under cap and avoids 403 rate-limit bursts. Bump to 30s if Sandi has a
 // production-tier key (5000/hour).
-const UNSPLASH_INTERVAL_MS = 75_000;
+// Pexels-only mode: Unsplash key missing, so we run on Pexels demo tier
+// (200/hour = 18s/req minimum). 20s gives a small buffer against bursts.
+const UNSPLASH_INTERVAL_MS = 20_000;
 
 function isString(s) {
   return typeof s === "string" && s.length > 0;
@@ -121,10 +123,21 @@ async function main() {
   console.log(`Limit: ${LIMIT === Infinity ? "all" : LIMIT}`);
   console.log(`Pacing: ${UNSPLASH_INTERVAL_MS}ms between Unsplash calls`);
 
+  // Replace not just EMPTY featuredImage, but also dead-source URLs that render
+  // as broken images on the static deploy:
+  //   - /wp-content/uploads/... → legacy WordPress media path; only the article
+  //     TEXT was scraped on import, the media library was never migrated, so the
+  //     static HTML 404s on these (confirmed: img naturalWidth=0 in-browser).
+  //   - pollinations.ai → the image service turned paid (HTTP 402), all dead.
+  // These are NON-empty, so the original `IS NULL OR = ''` filter skipped them
+  // and they stayed broken on live pages.
   const articles = await client.query(
     `SELECT a.id, a.title, d.name AS domain_name
      FROM "pbn"."Article" a JOIN "pbn"."Domain" d ON d.id = a."domainId"
-     WHERE a."featuredImage" IS NULL OR a."featuredImage" = ''
+     WHERE a."featuredImage" IS NULL
+        OR a."featuredImage" = ''
+        OR a."featuredImage" LIKE '%/wp-content/%'
+        OR a."featuredImage" LIKE '%pollinations%'
      ORDER BY a."createdAt" DESC`,
   );
   const target = articles.rows.slice(0, LIMIT);
