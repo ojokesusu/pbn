@@ -10,6 +10,7 @@
 
 import "dotenv/config";
 import pg from "pg";
+import { randomBytes } from "node:crypto";
 
 const { Client } = pg;
 const DRY = !process.argv.includes("--apply");
@@ -34,7 +35,11 @@ async function main() {
        AND a."featuredImage" IS NOT NULL AND a."featuredImage" != ''
        AND a."updatedAt" > COALESCE(d."lastDeployed", '2020-01-01'::timestamp)
      GROUP BY d.id, d.url, d."lastDeployed"
-     ORDER BY stale_articles DESC, d."lastDeployed" ASC NULLS FIRST
+     -- Prioritise ALREADY-DEPLOYED domains (lastDeployed not null) first: those
+     -- are live and currently showing broken <img> to visitors, so fixing them
+     -- has visible impact. Never-deployed domains (no live broken image yet)
+     -- come after, ordered by most stale-images first within each group.
+     ORDER BY (d."lastDeployed" IS NULL) ASC, stale_articles DESC, d."lastDeployed" ASC
      LIMIT $1`,
     [LIMIT],
   );
@@ -56,12 +61,15 @@ async function main() {
   let queued = 0, failed = 0;
   for (const row of r.rows) {
     try {
+      // ID generated in JS — Supabase Postgres has no pgcrypto, so
+      // gen_random_bytes() is unavailable. randomBytes is plenty unique here.
+      const newId = "dq_" + randomBytes(12).toString("hex");
       await c.query(
         `INSERT INTO "pbn"."DeployQueueItem" (id, "domainId", "serverId", status, priority, "createdAt")
-         SELECT 'dq_' || encode(gen_random_bytes(8), 'hex'), d.id, d."serverId", 'queued', 50, NOW()
+         SELECT $2, d.id, d."serverId", 'queued', 50, NOW()
          FROM "pbn"."Domain" d WHERE d.id = $1
          ON CONFLICT ("domainId") DO UPDATE SET status='queued', priority=50, "attemptedAt"=NULL, "errorMessage"=''`,
-        [row.id],
+        [row.id, newId],
       );
       queued++;
       if (queued % 10 === 0) console.log(`  ${queued}/${r.rows.length} queued`);
