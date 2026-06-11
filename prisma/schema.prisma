@@ -702,3 +702,61 @@ model DomainHealthLog {
   @@index([checkedAt])
   @@schema("pbn")
 }
+
+// ── Disaster Recovery ──
+// BackupRecord — one row per DB backup attempt. The dashboard creates a row
+// (status='queued'); the RDP daemon polls, dumps the pbn schema to a compressed
+// NDJSON file, ships it to the backup server (contabo30) + keeps a local RDP
+// copy, then writes size/counts/location back. Mirrors the ProvisionTask job
+// pattern so the existing dashboard→daemon poll loop drives it.
+model BackupRecord {
+  id           String   @id @default(cuid())
+  status       String   @default("queued")   // queued | running | success | failed
+  trigger      String   @default("manual")   // manual | scheduled
+  progress     Int      @default(0)          // 0..100
+  currentStep  String   @default("")
+  sizeMb       Float    @default(0)          // dump size in MB (compressed)
+  tableCounts  String   @default("")         // JSON: { "Domain": 712, ... }
+  remotePath   String   @default("")         // path on contabo30
+  localPath    String   @default("")         // path on RDP secondary copy
+  downloadUrl  String   @default("")         // signed/served URL if available
+  errorMessage String   @default("")
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@schema("pbn")
+}
+
+// EvacuationJob — one row per "get domains off a dying/blocked server or whole
+// provider" operation. The daemon executes the chain: provision replacement →
+// reassign domains → re-deploy content from the DB → repoint Cloudflare DNS.
+// counts let the UI show live progress; mode picks the unit (one server vs all
+// servers of a provider). serverId/provider are plain strings (no FK) — this is
+// a job log, not a referential entity.
+model EvacuationJob {
+  id              String   @id @default(cuid())
+  status          String   @default("queued")  // queued | running | success | partial | failed
+  mode            String   @default("provider") // provider | server
+  sourceProvider  String   @default("")
+  sourceServerId  String   @default("")
+  targetServerIds String   @default("")         // JSON array of destination server ids
+  progress        Int      @default(0)
+  currentStep     String   @default("")
+  log             String   @default("")
+  domainCount     Int      @default(0)          // domains in scope
+  reassignedCount Int      @default(0)
+  redeployedCount Int      @default(0)
+  dnsRepointed    Int      @default(0)
+  errorMessage    String   @default("")
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@schema("pbn")
+}

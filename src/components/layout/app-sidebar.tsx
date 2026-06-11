@@ -33,6 +33,7 @@ import {
   Gamepad2,
   TrendingUp,
   BarChart3,
+  DatabaseBackup,
 } from "lucide-react"
 import { useMe } from "@/hooks/use-me"
 import { AvatarDisplay } from "@/components/ui/avatar-display"
@@ -254,6 +255,7 @@ const MENU_GROUPS: NavGroup[] = [
         adminOnly: true,
       },
       { title: "Import", href: "/import", icon: Upload, tourId: "nav-import" },
+      { title: "Backup & Recovery", href: "/backup-recovery", icon: DatabaseBackup, tourId: "nav-backup", adminOnly: true },
       { title: "Cloudflare", href: "/cloudflare", icon: Cloud, tourId: "nav-cloudflare" },
       {
         title: "Health Check",
