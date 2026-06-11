@@ -138,7 +138,15 @@ async function main() {
         OR a."featuredImage" = ''
         OR a."featuredImage" LIKE '%/wp-content/%'
         OR a."featuredImage" LIKE '%pollinations%'
-     ORDER BY a."createdAt" DESC`,
+     -- Process DEAD-source images first (they show a broken <img> icon on live
+     -- pages — worst UX), THEN empty (no image, no broken icon). The wp-content
+     -- rows were all bulk-imported on one old date, so a plain createdAt DESC
+     -- buried them at the back of the queue.
+     ORDER BY
+       CASE WHEN a."featuredImage" LIKE '%/wp-content/%' THEN 0
+            WHEN a."featuredImage" LIKE '%pollinations%' THEN 1
+            ELSE 2 END,
+       a."createdAt" DESC`,
   );
   const target = articles.rows.slice(0, LIMIT);
   console.log(`\nBackfilling ${target.length} of ${articles.rows.length} affected articles\n`);
