@@ -18,6 +18,7 @@ model Server {
   host            String   @unique
   username        String
   password        String
+  passwordEnc     String   @default("") // AES-256-GCM of the FTP password (audit G3); plaintext `password` kept as legacy fallback until re-encrypted
   port            Int      @default(21)
   status          String   @default("active")
   provider        String   @default("")

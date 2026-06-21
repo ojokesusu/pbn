@@ -5,6 +5,7 @@ import { generateSite } from "@/lib/generator";
 import { deployVisFtp } from "@/lib/ftp";
 import { submitToIndexNow } from "@/lib/google-ping";
 import { ensureThemeForDomain } from "@/lib/theme-engine";
+import { resolveServerPassword } from "@/lib/crypto";
 
 export interface DeployResult {
   domainId: string;
@@ -70,7 +71,8 @@ export async function deployDomain(domainId: string): Promise<DeployResult> {
     // Generate the static site
     const { files } = await generateSite(domainId);
 
-    if (!domain.server?.host || !domain.server?.username || !domain.server?.password) {
+    const serverPassword = domain.server ? resolveServerPassword(domain.server) : "";
+    if (!domain.server?.host || !domain.server?.username || !serverPassword) {
       await prisma.deployLog.update({
         where: { id: deployLog.id },
         data: {
@@ -105,7 +107,7 @@ export async function deployDomain(domainId: string): Promise<DeployResult> {
       {
         host: domain.server.host,
         user: domain.server.username,
-        password: domain.server.password,
+        password: serverPassword,
         port: domain.server.port,
       },
       files,

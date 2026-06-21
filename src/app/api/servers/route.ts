@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { denyIfNotAdmin } from "@/lib/auth";
+import { prepareServerPassword, stripServerSecrets } from "@/lib/crypto";
 
 export async function GET(request: NextRequest) {
   const denied = await denyIfNotAdmin();
@@ -37,10 +38,12 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
+    // Never ship server credentials to the client (audit G3).
+    const safe = servers.map(stripServerSecrets);
     if (!isPaginated) {
-      return NextResponse.json(servers);
+      return NextResponse.json(safe);
     }
-    return NextResponse.json({ data: servers, total, page, perPage });
+    return NextResponse.json({ data: safe, total, page, perPage });
   } catch (error) {
     console.error("Failed to fetch servers:", error);
     return NextResponse.json(
@@ -72,6 +75,7 @@ export async function POST(request: NextRequest) {
       finalLabel = `Server-${String(count + 1).padStart(3, "0")}`;
     }
 
+    const creds = prepareServerPassword(typeof password === "string" ? password : "");
     const server = await prisma.server.create({
       data: {
         label: finalLabel,
@@ -79,7 +83,8 @@ export async function POST(request: NextRequest) {
         nameserver2: nameserver2 ?? "",
         host,
         username: username ?? "",
-        password: password ?? "",
+        password: creds.password,
+        passwordEnc: creds.passwordEnc,
         port: port ?? 21,
         status: status ?? "active",
       },
@@ -90,7 +95,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(server, { status: 201 });
+    return NextResponse.json(stripServerSecrets(server), { status: 201 });
   } catch (error) {
     console.error("Failed to create server:", error);
     return NextResponse.json(

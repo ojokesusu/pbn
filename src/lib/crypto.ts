@@ -130,3 +130,55 @@ export function decryptPasswordOrLegacy(blob: string): string {
   // Reverse with Buffer.from(blob, "base64").toString("utf8").
   return Buffer.from(blob, "base64").toString("utf8");
 }
+
+// ── Server FTP credentials (audit G3) ──
+// Server.password used to be stored in plaintext. We now store AES-256-GCM
+// ciphertext in Server.passwordEnc and keep the plaintext `password` column only
+// as a migration fallback (re-encrypt existing rows with
+// scripts/encrypt-server-passwords.mjs, then a later migration can drop it).
+
+/**
+ * Returns the columns to persist for a server password. Encrypts into
+ * passwordEnc when PROVISION_PASSWORD_KEY is available; otherwise falls back to
+ * legacy plaintext storage (so server management keeps working without the key)
+ * and warns loudly.
+ */
+export function prepareServerPassword(plaintext: string): { password: string; passwordEnc: string } {
+  if (!plaintext) return { password: "", passwordEnc: "" };
+  try {
+    return { password: "", passwordEnc: encryptPassword(plaintext) };
+  } catch (err) {
+    console.warn(
+      "[crypto] could not encrypt server password (set PROVISION_PASSWORD_KEY + run scripts/encrypt-server-passwords.mjs); storing legacy plaintext:",
+      err instanceof Error ? err.message : err
+    );
+    return { password: plaintext, passwordEnc: "" };
+  }
+}
+
+/**
+ * Returns the usable plaintext password for a server: decrypts passwordEnc when
+ * present, else falls back to the legacy plaintext `password` column so rows not
+ * yet re-encrypted keep working.
+ */
+export function resolveServerPassword(server: { passwordEnc?: string | null; password?: string | null }): string {
+  if (server.passwordEnc) {
+    try {
+      return decryptPassword(server.passwordEnc);
+    } catch (err) {
+      console.error(
+        "[crypto] failed to decrypt server passwordEnc; falling back to legacy plaintext:",
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+  return server.password ?? "";
+}
+
+/** Removes credential fields before a server row is serialized to a client. */
+export function stripServerSecrets<T extends object>(server: T): Omit<T, "password" | "passwordEnc"> {
+  const copy: Record<string, unknown> = { ...(server as Record<string, unknown>) };
+  delete copy.password;
+  delete copy.passwordEnc;
+  return copy as Omit<T, "password" | "passwordEnc">;
+}
