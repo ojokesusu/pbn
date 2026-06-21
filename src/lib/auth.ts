@@ -129,16 +129,36 @@ export async function denyIfNotAdmin() {
   return null
 }
 
+// Seeds the first admin ONLY when no users exist yet. The password comes from
+// ADMIN_BOOTSTRAP_PASSWORD (never a hardcoded literal) and must pass the strong-
+// password policy. If the env var is unset/weak, NO default admin is created —
+// so a fresh/restored deploy is never reachable with well-known credentials.
 export async function ensureDefaultAdmin() {
   const count = await prisma.user.count()
   if (count > 0) return
+
+  const bootstrapPassword = process.env.ADMIN_BOOTSTRAP_PASSWORD
+  if (!bootstrapPassword) {
+    console.warn(
+      "[auth] No users exist and ADMIN_BOOTSTRAP_PASSWORD is unset — not seeding a default admin. " +
+      "Set ADMIN_BOOTSTRAP_PASSWORD (min 12 chars, upper/lower/digit/symbol) and restart to create the first admin."
+    )
+    return
+  }
+
+  const weakness = validatePasswordStrength(bootstrapPassword)
+  if (weakness) {
+    console.error(`[auth] ADMIN_BOOTSTRAP_PASSWORD rejected (${weakness}). Not seeding a default admin.`)
+    return
+  }
+
   await prisma.user.create({
     data: {
       username: "admin",
-      passwordHash: hashPassword("admin123"),
+      passwordHash: hashPassword(bootstrapPassword),
       name: "Administrator",
       role: "admin",
     },
   })
-  console.log("[auth] Created default admin user: admin / admin123")
+  console.log("[auth] Created default admin user 'admin' from ADMIN_BOOTSTRAP_PASSWORD.")
 }
