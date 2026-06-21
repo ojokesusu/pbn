@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
+import DOMPurify from "isomorphic-dompurify"
 import { ArrowLeft, Sparkles, Loader2, Save, RotateCw, Zap, Search } from "lucide-react"
 
 import { SidebarInset } from "@/components/ui/sidebar"
@@ -741,7 +742,7 @@ export default function AiGeneratePage() {
                         <div
                           className="rounded-lg border p-4 max-h-[400px] overflow-y-auto prose prose-sm"
                           style={{ borderColor: "var(--border)", color: "var(--secondary-foreground)" }}
-                          dangerouslySetInnerHTML={{ __html: result.content }}
+                          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(result.content) }}
                         />
                       </div>
                       <div className="space-y-2">
