@@ -81,6 +81,13 @@ model Domain {
   indexNowLogs    IndexNowLog[]
   healthLogs      DomainHealthLog[]
 
+  // Indexes for hot dashboard/health/stats query predicates (audit P2).
+  @@index([serverId])
+  @@index([isAlive, writeOff])
+  @@index([lastChecked])
+  @@index([lastDeployed])
+  @@index([isAdult])
+  @@index([createdAt])
   @@schema("pbn")
 }
 
