@@ -66,9 +66,20 @@ export async function PUT(
       return NextResponse.json({ error: "Domain not found" }, { status: 404 });
     }
 
+    // Allow-list: only the fields the edit form legitimately sends. Passing the
+    // raw body straight to update() let any column be set (mass-assignment) —
+    // e.g. flipping isAdult/writeOff/serverId to bypass quarantine. Audit G6.
+    const allowed: Record<string, unknown> = {};
+    if (typeof body.name === "string") allowed.name = body.name;
+    if (typeof body.url === "string") allowed.url = body.url;
+    if (typeof body.genre === "string") allowed.genre = body.genre;
+    if (typeof body.status === "string") allowed.status = body.status;
+    if (body.serverId === null || typeof body.serverId === "string") allowed.serverId = body.serverId;
+    if (body.themeId === null || typeof body.themeId === "string") allowed.themeId = body.themeId;
+
     const domain = await prisma.domain.update({
       where: { id },
-      data: body,
+      data: allowed,
       include: {
         theme: true,
         server: { select: { id: true, label: true, name: true, host: true } },
