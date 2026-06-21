@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db";
 import {
   getLiveCount,
@@ -7,8 +8,16 @@ import {
   getDeployedTodayCount,
 } from "@/lib/domain-stats";
 
-export async function GET() {
-  try {
+// Dashboard badge/stat numbers don't need to be real-time. Cache the ~24
+// count/aggregate queries for 60s so they don't run on every dashboard poll —
+// the Prisma pool is pinned to connection_limit=1 (PgBouncer), so uncached they
+// effectively serialize and compound latency. Audit P3.
+//
+// NOTE (Next 16): unstable_cache is deprecated in favor of the `use cache`
+// directive, which requires the global `cacheComponents` opt-in. Deferred here
+// to avoid a repo-wide caching-behavior change; revisit with Cache Components.
+const getCachedStats = unstable_cache(
+  async () => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
@@ -85,7 +94,7 @@ export async function GET() {
       }),
     ]);
 
-    return NextResponse.json({
+    return {
       totalDomains,
       totalArticles,
       recentDeploys,
@@ -110,7 +119,16 @@ export async function GET() {
       iGamingDomains,
       rankKeywordsActive,
       indexNowUsedToday,
-    });
+    };
+  },
+  ["dashboard-stats"],
+  { revalidate: 60 }
+);
+
+export async function GET() {
+  try {
+    const stats = await getCachedStats();
+    return NextResponse.json(stats);
   } catch (error) {
     console.error("Failed to fetch stats:", error);
     return NextResponse.json({ error: "Failed to fetch stats" }, { status: 500 });

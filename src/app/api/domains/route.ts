@@ -87,6 +87,10 @@ export async function GET(request: NextRequest) {
           _count: { select: { articles: true } },
         },
         orderBy: { createdAt: "desc" },
+        // Safety ceiling (audit P1): legacy callers expect "all" rows, but cap to
+        // avoid an unbounded full-table load if the fleet grows huge. ~900 today;
+        // migrate these callers to pagination before this is ever hit.
+        take: 5000,
       });
       const allIds = allDomains.map((d) => d.id);
       const wpCountsLegacy = allIds.length
