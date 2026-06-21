@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { deployDomain } from "@/lib/deploy";
+import { denyIfNotAdmin } from "@/lib/auth";
 
 // POST — bulk deploy
 // body: { limit?: number, offset?: number, filter?: "hasContent" | "all", domainIds?: string[] }
 export async function POST(request: NextRequest) {
+  const denied = await denyIfNotAdmin();
+  if (denied) return denied;
   try {
     const body = await request.json();
     const { limit, offset, filter = "hasContent", domainIds, concurrency = 3 } = body;

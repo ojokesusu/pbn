@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { denyIfNotAdmin } from "@/lib/auth";
 
 // POST /api/site-check — Check deployed sites for CSS/style integrity
 export async function POST() {
+  const denied = await denyIfNotAdmin();
+  if (denied) return denied;
   try {
     const deployed = await prisma.domain.findMany({
       where: { lastDeployed: { not: null } },

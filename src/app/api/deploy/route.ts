@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { deployDomain } from "@/lib/deploy";
+import { denyIfNotAdmin } from "@/lib/auth";
 
 // POST /api/deploy - Deploy a single domain's site
 export async function POST(request: Request) {
+  const denied = await denyIfNotAdmin();
+  if (denied) return denied;
   try {
     const { domainId } = await request.json();
 

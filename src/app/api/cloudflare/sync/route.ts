@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { syncDomainDns, bareDomain } from "@/lib/cloudflare";
+import { denyIfNotAdmin } from "@/lib/auth";
 
 interface SyncResult {
   domain: string;
@@ -14,6 +15,8 @@ interface SyncResult {
 // POST — sync DNS for one domain or all domains
 // body: { domainId?: string, all?: boolean, limit?: number, offset?: number }
 export async function POST(request: NextRequest) {
+  const denied = await denyIfNotAdmin();
+  if (denied) return denied;
   try {
     const body = await request.json();
     const { domainId, all, limit, offset } = body;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, denyIfNotAdmin } from "@/lib/auth";
 
 const MASKED = "******";
 
@@ -55,6 +55,8 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await denyIfNotAdmin();
+  if (denied) return denied;
   try {
     const { id } = await params;
     const body = await request.json();
@@ -142,6 +144,8 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await denyIfNotAdmin();
+  if (denied) return denied;
   try {
     const { id } = await params;
 
