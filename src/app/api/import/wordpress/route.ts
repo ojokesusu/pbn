@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ensureThemeForDomain } from "@/lib/theme-engine";
+import { denyIfNotAdmin } from "@/lib/auth";
+import { assertPublicHttpUrl } from "@/lib/url-guard";
 
 // ── WordPress REST API Scraper ──
 
@@ -95,6 +97,8 @@ async function fetchAllPages<T>(baseUrl: string, perPage = 100): Promise<T[]> {
 }
 
 export async function POST(request: NextRequest) {
+  const denied = await denyIfNotAdmin();
+  if (denied) return denied;
   try {
     const body = await request.json();
     const { wpUrl, domainId, action } = body;
@@ -104,6 +108,14 @@ export async function POST(request: NextRequest) {
     }
 
     const siteUrl = cleanUrl(wpUrl);
+    try {
+      await assertPublicHttpUrl(siteUrl);
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "URL ditolak" },
+        { status: 400 }
+      );
+    }
     const apiBase = `${siteUrl}/wp-json/wp/v2`;
 
     // ── Step 1: Check if WP REST API is available ──

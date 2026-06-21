@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { denyIfNotAdmin } from "@/lib/auth";
+import { assertPublicHttpUrl } from "@/lib/url-guard";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
@@ -378,6 +380,7 @@ function humanizeContent(html: string): string {
  */
 async function scrapeHeadlines(url: string): Promise<string> {
   try {
+    await assertPublicHttpUrl(url);
     const res = await fetch(url, {
       headers: {
         "User-Agent":
@@ -416,6 +419,8 @@ async function scrapeHeadlines(url: string): Promise<string> {
 }
 
 export async function POST(request: NextRequest) {
+  const denied = await denyIfNotAdmin();
+  if (denied) return denied;
   try {
     const body = await request.json();
     const { topic, newsSource, language, wordCount, genre } = body;
