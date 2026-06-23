@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "smoke:scope-c": "tsx scripts/scope-c-smoke.ts"
+    "smoke:scope-c": "tsx scripts/scope-c-smoke.ts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
