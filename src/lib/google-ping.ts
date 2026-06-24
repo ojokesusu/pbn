@@ -116,6 +116,21 @@ export async function submitToIndexNow(domainId: string): Promise<IndexNowResult
 
   if (!domain) throw new Error("Domain not found");
 
+  // Skip IndexNow for domains that aren't serving — a write-off or down domain just burns a 15s key.txt
+  // timeout and logs a noisy "failed" DeployLog. (These were the dominant IndexNow failures: write-off +
+  // dead hosts hitting ENOTFOUND / ECONNREFUSED / SSL errors.)
+  if (domain.writeOff || !domain.isAlive) {
+    return {
+      domainId,
+      url: domain.url,
+      success: false,
+      status: 0,
+      message: domain.writeOff ? "skipped: domain write-off" : "skipped: domain not alive",
+      urlsSubmitted: 0,
+      submittedAt,
+    };
+  }
+
   const siteUrl = domain.url.replace(/\/+$/, "");
   const host = siteUrl.replace(/^https?:\/\//, "");
   const key = getIndexNowKey();

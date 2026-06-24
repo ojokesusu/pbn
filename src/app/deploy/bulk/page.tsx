@@ -95,26 +95,46 @@ export default function BulkDeployPage() {
     const allResults: DeployResult[] = []
 
     try {
+      let skipped = 0
       for (let i = 0; i < total; i += batchSize) {
         const batch = domainIds.slice(i, i + batchSize)
-        const res = await fetch("/api/deploy/bulk", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ domainIds: batch, concurrency }),
-        })
-        const data = await res.json()
-        if (!res.ok) {
-          setError(data.error || "Bulk deploy gagal")
-          break
+        // Resilient per-batch POST. A transient 502 "upstream error" (Railway restarting a container, or a
+        // slow FTP batch) returns a non-JSON body; the old code ran res.json() unguarded, threw, and aborted
+        // the WHOLE run. Now: retry 5xx a few times, parse defensively, and SKIP a stubborn batch instead of
+        // killing the entire deploy.
+        let res: Response | null = null
+        let data: { results?: DeployResult[]; summary?: { success: number; failed: number; totalFiles: number }; error?: string } = {}
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (attempt > 0) await new Promise((r) => setTimeout(r, 3000))
+          try {
+            res = await fetch("/api/deploy/bulk", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ domainIds: batch, concurrency }),
+            })
+            const text = await res.text()
+            try { data = JSON.parse(text) } catch { data = { error: `Server ${res.status}: ${text.slice(0, 80)}` } }
+          } catch (e) {
+            res = null
+            data = { error: String(e) }
+          }
+          if (res && (res.ok || res.status < 500)) break // success, or a 4xx we should not retry
+        }
+        if (!res || !res.ok || !data.results) {
+          skipped += batch.length
+          totalFailed += batch.length
+          setProgress({ current: Math.min(i + batchSize, total), total })
+          continue // skip this batch, keep deploying the rest
         }
         allResults.push(...data.results)
-        totalSuccess += data.summary.success
-        totalFailed += data.summary.failed
-        totalFiles += data.summary.totalFiles
+        totalSuccess += data.summary?.success ?? 0
+        totalFailed += data.summary?.failed ?? 0
+        totalFiles += data.summary?.totalFiles ?? 0
         setResults(allResults.slice(-100))
         setProgress({ current: Math.min(i + batchSize, total), total })
       }
       setSummary({ success: totalSuccess, failed: totalFailed, totalFiles })
+      if (skipped > 0) setError(`${skipped} domain dilewati karena server sibuk sesaat — klik Deploy lagi buat ngulang yang kelewat.`)
       fetchStats()
     } catch (err) {
       setError(`Deploy gagal: ${String(err)}`)
