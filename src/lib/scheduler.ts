@@ -952,18 +952,26 @@ export async function processSchedulerTick(): Promise<{
   // that sees a future value returns early; the owner clears it on exit. The
   // 10-min TTL is the crash safety net — if a tick dies before clearing, the
   // lock auto-expires and the next cron call takes over.
-  const TICK_LOCK_MS = 10 * 60 * 1000;
-  if (config.tickLockUntil && config.tickLockUntil > now) {
-    console.log(`[scheduler] tick already in progress (lock until ${config.tickLockUntil.toISOString()}), skipping`);
-    return { processed: 0, generated: 0, deployed: 0, purged: 0, backlinksPlaced: 0, ranksChecked: 0, healthChecked: 0, healthDead: 0, healthAlive: 0, errors: ["locked"], perStrategySummary: {} };
-  }
+  // Atomic claim using the DATABASE clock (Postgres now()), NOT the container clock. A Railway container
+  // whose wall clock drifts behind real time (observed ~7h after an idle/suspend) would otherwise set a
+  // fresh lock and then compare it against its own wrong `new Date()`, see the lock as far in the future,
+  // and never release it -- a permanent self-lock that stalls every tick. This conditional UPDATE claims
+  // the lock only when it is free or already expired per the DB clock, and is race-safe (no read-then-write
+  // gap): 0 rows affected means another tick already holds it. The 10-minute TTL is the crash safety net.
+  let claimed = 0;
   try {
-    await prisma.schedulerConfig.update({
-      where: { id: config.id },
-      data: { tickLockUntil: new Date(now.getTime() + TICK_LOCK_MS) },
-    });
+    claimed = await prisma.$executeRaw`
+      UPDATE "pbn"."SchedulerConfig"
+      SET "tickLockUntil" = now() + interval '10 minutes'
+      WHERE "id" = ${config.id}
+        AND ("tickLockUntil" IS NULL OR "tickLockUntil" < now())`;
   } catch (lockErr) {
     console.warn("[scheduler] failed to claim tickLockUntil:", lockErr);
+    claimed = 1; // a DB error claiming the lock shouldn't block work -- proceed (matches old behavior on claim failure)
+  }
+  if (claimed === 0) {
+    console.log(`[scheduler] tick already in progress (db-clock lock), skipping`);
+    return { processed: 0, generated: 0, deployed: 0, purged: 0, backlinksPlaced: 0, ranksChecked: 0, healthChecked: 0, healthDead: 0, healthAlive: 0, errors: ["locked"], perStrategySummary: {} };
   }
 
   try {
