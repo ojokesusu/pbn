@@ -882,7 +882,11 @@ async function processServerHealthRollup(now: Date): Promise<{ alertsFired: numb
     select: {
       id: true,
       name: true,
-      domains: { select: { isAlive: true }, where: { isAdult: false } },
+      // Exclude write-off domains: they are operator-marked dead and (per the Domain.writeOff schema note)
+      // excluded from health counts. Counting them in the denominator deflated the alive-rate and fired
+      // false "drops below 50% alive" alerts on servers that are actually healthy (e.g. 88-90% of ACTIVE
+      // domains alive, but mostly write-off rows dragging the raw ratio under 50%).
+      domains: { select: { isAlive: true }, where: { isAdult: false, writeOff: false } },
     },
   });
 
