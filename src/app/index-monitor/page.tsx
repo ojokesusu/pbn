@@ -53,6 +53,11 @@ export default function IndexMonitorPage() {
   const [updating, setUpdating] = useState<string | null>(null)
   const [bulkChecking, setBulkChecking] = useState(false)
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 })
+  // Tracks which domains have already been opened in a Google tab this session,
+  // so "Cek Google" can open the NEXT batch (RAM-friendly) and the operator can
+  // bulk-mark only the ones actually checked.
+  const [openedIds, setOpenedIds] = useState<Set<string>>(new Set())
+  const BATCH_SIZE = 20
   const perPage = 25
 
   const loadData = useCallback(async () => {
@@ -152,49 +157,112 @@ export default function IndexMonitorPage() {
     }
   }
 
-  // Open Google site: checks for every filtered domain, staggered so the
-  // browser doesn't block popups and Google doesn't rate-limit/CAPTCHA.
-  async function bulkCheckGoogle() {
-    const targets = filtered // respects current filters + search
+  // Mark every domain already opened via "Cek Google" (and still within the
+  // current filter) as Terindex in one click — confirms a checked batch without
+  // clicking the per-row green button. Only touches opened domains; the rest are
+  // left untouched (unlike "Semua Terindex" which marks ALL filtered).
+  async function markOpenedIndexed() {
+    const targets = filtered.filter((d) => openedIds.has(d.id))
     if (targets.length === 0) {
       await confirm({
-        title: "Tidak ada domain",
-        message: "Tidak ada domain untuk dicek dengan filter saat ini.",
+        title: "Belum ada yang dibuka",
+        message: 'Buka domain dulu lewat tombol "Cek Google (20 berikutnya)", baru tandai yang sudah dicek sebagai Terindex.',
         confirmText: "OK",
       })
       return
     }
-    if (targets.length > 20) {
-      const ok = await confirm({
-        title: `Buka ${targets.length} tab Google sekaligus?`,
-        message:
-          `Sistem akan membuka tab Google site: search satu per satu (~1 detik per tab).\n\nPastikan popup blocker sudah dimatikan untuk localhost:3000 sebelum lanjut.`,
-        confirmText: "Buka Semua",
+    const ok = await confirm({
+      title: `Tandai ${targets.length} domain yang sudah dibuka sebagai "Terindex"?`,
+      message: "Hanya domain yang sudah kamu buka di tab Google (dan sesuai filter) yang ditandai. Domain yang belum dibuka tidak tersentuh.",
+      confirmText: "Tandai Terindex",
+    })
+    if (!ok) return
+    const markedIds = targets.map((d) => d.id)
+    try {
+      const res = await fetch("/api/index-monitor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domainIds: markedIds, indexStatus: "indexed" }),
       })
-      if (!ok) return
+      if (!res.ok) {
+        await confirm({ title: "Gagal update status", message: "Server menolak permintaan. Coba lagi.", confirmText: "OK" })
+        return
+      }
+      // Drop the just-marked ids from the "opened" set so the "dibuka" counter
+      // self-clears to this batch and the button can't re-mark them after a
+      // filter switch (they're already indexed now).
+      setOpenedIds((prev) => {
+        const next = new Set(prev)
+        for (const id of markedIds) next.delete(id)
+        return next
+      })
+      await loadData()
+    } catch {
+      await confirm({ title: "Koneksi bermasalah", message: "Tidak bisa menghubungi server. Coba lagi.", confirmText: "OK" })
+    }
+  }
+
+  // Open Google site: checks for the NEXT batch of up to BATCH_SIZE domains that
+  // haven't been opened yet (respects current filters + search). Batched so the
+  // browser doesn't choke on 100s of tabs at once — opening that many crashes
+  // low-RAM machines. Click again for the next 20.
+  async function checkNextBatch() {
+    const targets = filtered.filter((d) => !openedIds.has(d.id)).slice(0, BATCH_SIZE)
+    if (targets.length === 0) {
+      await confirm({
+        title: "Semua sudah dibuka",
+        message: "Semua domain pada filter ini sudah dibuka di tab Google. Ganti filter, atau klik Reset untuk mulai dari awal.",
+        confirmText: "OK",
+      })
+      return
     }
 
     setBulkChecking(true)
     setBulkProgress({ current: 0, total: targets.length })
 
+    // Only count a domain as "opened" if the tab ACTUALLY opened. The 800ms gap
+    // means tabs after the first lose the click's user-activation, so a popup
+    // blocker silently swallows them. We intentionally DON'T pass "noopener"
+    // here so window.open returns the WindowProxy (or null when blocked) — that
+    // return value is the only reliable signal a tab really opened. Marking a
+    // blocked-but-unseen domain as "dibuka" would let "Terindex (Dibuka)" write
+    // indexStatus=indexed for domains the operator never actually looked at.
+    const newlyOpened: string[] = []
+    let blocked = 0
     for (let i = 0; i < targets.length; i++) {
       const d = targets[i]
       const domain = d.url.replace(/^https?:\/\//, "").replace(/\/+$/, "")
-      // Use noopener to prevent the new tab from stealing focus back
-      window.open(
-        `https://www.google.com/search?q=site:${domain}`,
-        "_blank",
-        "noopener"
-      )
+      const w = window.open(`https://www.google.com/search?q=site:${domain}`, "_blank")
+      if (w) newlyOpened.push(d.id)
+      else blocked++
       setBulkProgress({ current: i + 1, total: targets.length })
-      // Small delay between opens — lets browser manage tab creation
-      // and prevents Google from flagging as automated
+      // Small delay between opens — lets the browser manage tab creation and
+      // keeps Google from flagging the burst as automated.
       if (i < targets.length - 1) {
-        await new Promise((r) => setTimeout(r, 1000))
+        await new Promise((r) => setTimeout(r, 800))
       }
     }
 
+    setOpenedIds((prev) => {
+      const next = new Set(prev)
+      for (const id of newlyOpened) next.add(id)
+      return next
+    })
     setBulkChecking(false)
+
+    // If the popup blocker swallowed tabs, only the ones that truly opened are
+    // counted as "dibuka". Tell the operator so the count never silently lies.
+    if (blocked > 0) {
+      await confirm({
+        title: `${blocked} tab diblokir popup blocker`,
+        message: `Cuma ${newlyOpened.length} dari ${targets.length} tab yang kebuka. Izinkan pop-up untuk situs ini, lalu klik "Cek Google" lagi. Hanya domain yang benar-benar terbuka yang dihitung "sudah dibuka".`,
+        confirmText: "OK",
+      })
+    }
+  }
+
+  function resetOpened() {
+    setOpenedIds(new Set())
   }
 
   const filtered = domains.filter((d) => {
@@ -206,6 +274,11 @@ export default function IndexMonitorPage() {
     }
     return true
   })
+
+  // How many of the currently-filtered domains have already been opened in a
+  // Google tab this session (drives the batch button + "sudah dibuka" actions).
+  const openedInFilter = filtered.reduce((n, d) => n + (openedIds.has(d.id) ? 1 : 0), 0)
+  const remainingToOpen = filtered.length - openedInFilter
 
   const totalPages = Math.ceil(filtered.length / perPage)
   const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage)
@@ -227,29 +300,57 @@ export default function IndexMonitorPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              onClick={bulkCheckGoogle}
-              disabled={bulkChecking || loading || filtered.length === 0}
-              className="rounded-lg shadow-lg"
-              style={{
-                background: "linear-gradient(135deg, #a855f7, #7c3aed)",
-                color: "#ffffff",
-                border: "none",
-              }}
-              title="Buka Google site: search untuk semua domain yang terlihat (respect filter)"
-            >
-              {bulkChecking ? (
-                <>
-                  <Loader2 className="size-4 mr-1.5 animate-spin" />
-                  {bulkProgress.current}/{bulkProgress.total}
-                </>
-              ) : (
-                <>
-                  <Search className="size-4 mr-1.5" />
-                  Cek Google Semua ({filtered.length})
-                </>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={checkNextBatch}
+                disabled={bulkChecking || loading || remainingToOpen === 0}
+                className="rounded-lg shadow-lg"
+                style={{
+                  background: "linear-gradient(135deg, #a855f7, #7c3aed)",
+                  color: "#ffffff",
+                  border: "none",
+                }}
+                title={`Buka ${BATCH_SIZE} domain berikutnya yang belum dibuka (sesuai filter). Klik lagi untuk 20 berikutnya — supaya RAM tidak jebol.`}
+              >
+                {bulkChecking ? (
+                  <>
+                    <Loader2 className="size-4 mr-1.5 animate-spin" />
+                    {bulkProgress.current}/{bulkProgress.total}
+                  </>
+                ) : (
+                  <>
+                    <Search className="size-4 mr-1.5" />
+                    {remainingToOpen > 0
+                      ? `Cek Google (${Math.min(BATCH_SIZE, remainingToOpen)} berikutnya)`
+                      : filtered.length > 0
+                        ? "Semua sudah dibuka"
+                        : "Cek Google"}
+                  </>
+                )}
+              </Button>
+              {filtered.length > 0 && (
+                <span
+                  className="text-xs whitespace-nowrap"
+                  style={{ color: "var(--muted-foreground)" }}
+                  title="Sudah dibuka di tab Google / total sesuai filter"
+                >
+                  {openedInFilter}/{filtered.length} dibuka
+                </span>
               )}
-            </Button>
+              {openedInFilter > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="rounded-lg h-8 text-xs"
+                  style={{ color: "var(--muted-foreground)" }}
+                  onClick={resetOpened}
+                  disabled={bulkChecking}
+                  title="Lupakan daftar 'sudah dibuka' dan mulai dari awal"
+                >
+                  Reset
+                </Button>
+              )}
+            </div>
             <Button
               variant="outline"
               className="rounded-lg"
@@ -271,9 +372,20 @@ export default function IndexMonitorPage() {
           >
             <div className="text-xs flex items-center gap-2" style={{ color: "var(--secondary-foreground)" }}>
               <span className="font-semibold" style={{ color: "#a855f7" }}>Tandai Massal:</span>
-              <span>Setelah scan Google, tandai {filtered.length} domain (yang terlihat sesuai filter) sekaligus.</span>
+              <span>Tandai <strong style={{ color: "#059669" }}>hanya yang sudah dibuka</strong> (Terindex Dibuka), atau <strong>semua {filtered.length}</strong> domain sesuai filter sekaligus.</span>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={markOpenedIndexed}
+                disabled={loading || openedInFilter === 0}
+                className="rounded-lg"
+                style={{ background: "#059669", color: "#ffffff", border: "none" }}
+                title="Tandai HANYA domain yang sudah dibuka di Google sebagai Terindex — aman, tidak menyentuh yang belum dicek"
+              >
+                <CheckCircle2 className="size-3.5 mr-1" />
+                Terindex (Dibuka: {openedInFilter})
+              </Button>
               <Button
                 size="sm"
                 onClick={() => bulkSetStatus("indexed")}
@@ -360,7 +472,7 @@ export default function IndexMonitorPage() {
               <div className="grid grid-cols-3 gap-4 text-sm" style={{ color: "#6d28d9" }}>
                 <div className="flex items-start gap-2">
                   <span className="flex items-center justify-center size-6 rounded-full bg-[#a855f7] text-white text-xs font-bold shrink-0">1</span>
-                  <p>Klik <strong>"Cek Google"</strong> untuk buka <code className="px-1 py-0.5 rounded text-xs bg-white/60">site:domain.com</code> di tab baru</p>
+                  <p>Klik <strong>&quot;Cek Google (20 berikutnya)&quot;</strong> untuk buka <code className="px-1 py-0.5 rounded text-xs bg-white/60">site:domain.com</code> 20 domain sekaligus — klik lagi untuk 20 berikutnya (biar RAM aman)</p>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="flex items-center justify-center size-6 rounded-full bg-[#a855f7] text-white text-xs font-bold shrink-0">2</span>
@@ -368,7 +480,7 @@ export default function IndexMonitorPage() {
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="flex items-center justify-center size-6 rounded-full bg-[#a855f7] text-white text-xs font-bold shrink-0">3</span>
-                  <p>Klik tombol hijau atau merah untuk tandai status di dashboard</p>
+                  <p>Tandai hijau/merah per baris, atau klik <strong>&quot;Terindex (Dibuka)&quot;</strong> untuk tandai semua yang barusan dibuka sekaligus</p>
                 </div>
               </div>
             </div>
