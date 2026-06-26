@@ -4,8 +4,10 @@
 // server-side scheduler tick.
 //
 // PERMANENT RULES (do not change without explicit user permission):
-//   1. Type priority — MS > MS 2 > LP > RTP > CN — high-priority types
-//      always get placed first until exhausted.
+//   1. Type priority — MS > MS 2 > LP > RTP > CN — high-priority types get
+//      placed first, but each backlink "exhausts" at the rule #7 per-backlink
+//      cap so the lower tiers (and the rest of the inventory) actually get a
+//      turn instead of MS monopolising every slot forever.
 //   2. Daily anti-spam limit — max N placements per 24h (BacklinkConfig.maxPerDay).
 //   3. Per-domain cap — max maxPerDomain placements per domain.
 //   4. Per-article cap — max maxPerArticle placements per article.
@@ -22,6 +24,12 @@
 //      topicCategory (e.g. "olahraga", "hiburan"). Prevents an "igaming"
 //      backlink landing in a "kriminal" article. Empty niche or empty
 //      article category → legacy behavior (match all).
+//   7. Per-backlink placement cap — each backlink is placed at most
+//      MAX_PLACEMENTS_PER_BACKLINK times total (existing + this run). Without
+//      it a single high-priority backlink never "exhausts" (it can go on
+//      unlimited articles), so the top tier monopolises every slot and 96% of
+//      the inventory (MS 2 / LP / RTP / CN / newly-added) never gets used. The
+//      cap forces rotation down the priority list once a backlink fills up.
 
 import { prisma } from "./db";
 
@@ -32,6 +40,11 @@ const TYPE_PRIORITY: Record<string, number> = {
   "RTP": 70,
   "CN": 60,
 };
+
+// Max times any single backlink may be placed across all articles (rule #7).
+// Tune this to trade off top-tier exposure vs. spreading across the inventory:
+// lower = more even spread, higher = high-priority backlinks dominate longer.
+const MAX_PLACEMENTS_PER_BACKLINK = 30;
 
 function priorityOf(type: string | null | undefined): number {
   if (!type) return 0;
@@ -354,7 +367,8 @@ export async function distributeBacklinks(
       (existingPlacementsByDomain[article.domainId] ?? 0) + article.backlinkPlacements.length;
   }
 
-  // Sort by priority — MS first, etc.
+  // Sort by priority — MS first, then least-placed first within a tier so a
+  // freshly-added MS (0 placements) jumps ahead of one that's already saturated.
   const sortedBacklinks = [...backlinks].sort((a, b) => {
     const dp = priorityOf(b.type) - priorityOf(a.type);
     if (dp !== 0) return dp;
@@ -362,6 +376,14 @@ export async function distributeBacklinks(
     if (dl !== 0) return dl;
     return Math.random() - 0.5;
   });
+
+  // Running placement count per backlink (existing placements + ones made in
+  // this run). Drives the per-backlink cap (rule #7) so no single backlink
+  // monopolises every slot — once it hits the cap it's skipped and the next
+  // priority gets its turn.
+  const placedCount = new Map<string, number>(
+    backlinks.map((b) => [b.id, b.placements.length])
+  );
 
   const enableNicheMatch = process.env.ANCHOR_CATEGORY_MATCH === "true";
 
@@ -441,6 +463,10 @@ export async function distributeBacklinks(
       const existingBacklinkIds = new Set(article.backlinkPlacements.map((p) => p.backlinkId));
       const availableBacklink = sortedBacklinks.find((bl) => {
         if (existingBacklinkIds.has(bl.id)) return false;
+        // Rule #7: skip backlinks that have hit the per-backlink placement cap,
+        // so the slot falls through to the next priority instead of re-using a
+        // saturated top-tier backlink forever.
+        if ((placedCount.get(bl.id) ?? 0) >= MAX_PLACEMENTS_PER_BACKLINK) return false;
         if (enableNicheMatch && !nicheMatchesArticle(bl.niche, article.topicCategory)) return false;
         return true;
       });
@@ -504,6 +530,7 @@ export async function distributeBacklinks(
 
       placedInDomain++;
       totalPlaced++;
+      placedCount.set(availableBacklink.id, (placedCount.get(availableBacklink.id) ?? 0) + 1);
       perServerToday[articleServerId] = (perServerToday[articleServerId] ?? 0) + 1;
 
       // Strategy bucket — placement + anchorMix accounting.
