@@ -5,7 +5,7 @@ import {
   getLiveCount,
   getDeadCount,
   getEverDeployedCount,
-  getDeployedTodayCount,
+  jakartaTodayStart,
 } from "@/lib/domain-stats";
 
 // Dashboard badge/stat numbers don't need to be real-time. Cache the ~24
@@ -18,8 +18,11 @@ import {
 // to avoid a repo-wide caching-behavior change; revisit with Cache Components.
 const getCachedStats = unstable_cache(
   async () => {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    // "Today" = Asia/Jakarta (WIB) midnight, matching the deploy counters. The
+    // old `new Date(); setHours(0,0,0,0)` resolved to the Railway container's UTC
+    // midnight (= 07:00 WIB), so every morning these counts reset to 0 and a full
+    // night of generation read as "yesterday".
+    const todayStart = jakartaTodayStart();
 
     const [
       totalDomains, totalArticles, recentDeploys, activeThemes, totalServers,
@@ -54,7 +57,14 @@ const getCachedStats = unstable_cache(
       prisma.domainSchedule.count({ where: { isActive: true } }),
       prisma.schedulerConfig.findFirst({ select: { isRunning: true } }),
       prisma.schedulerJob.count({ where: { createdAt: { gte: todayStart }, status: "success" } }),
-      getDeployedTodayCount(),
+      // Real deploys today = DeployLog deploy successes — this covers BOTH the
+      // scheduler's direct deploys AND the RDP SFTP worker. The old
+      // getDeployedTodayCount() counted DeployQueueItem completions, a path that
+      // now only fills via the once-daily redeploy sweep, so the widget read 0
+      // on a day with dozens of real deploys.
+      prisma.deployLog.count({
+        where: { action: "deploy", status: "success", deployedAt: { gte: todayStart } },
+      }),
       prisma.domain.count({ where: { indexStatus: "indexed" } }),
       prisma.backlinkPlacement.count({ where: { createdAt: { gte: todayStart } } }),
       prisma.backlinkPlacement.count(),

@@ -16,7 +16,7 @@ import { prisma } from "@/lib/db";
  * subtract the actual UTC↔Jakarta offset reported by Intl. This keeps the helper correct
  * even if IANA ever changes the zone definition.
  */
-function jakartaTodayStart(now: Date = new Date()): Date {
+export function jakartaTodayStart(now: Date = new Date()): Date {
   const fmt = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Jakarta",
     year: "numeric",
