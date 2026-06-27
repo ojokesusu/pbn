@@ -322,26 +322,36 @@ function randomHourInWindow(timeStart: number, timeEnd: number): number {
   return timeStart + Math.floor(Math.random() * span);
 }
 
+// Clamp a candidate time into the daily [timeStart, timeEnd] window interpreted
+// as Asia/Jakarta (WIB) wall-clock hours — NOT the Railway container's UTC hours.
+// The old code used getHours()/setHours() which on a UTC host treats the window
+// 6–23 as 06:00–23:00 UTC = 13:00 WIB–06:00 WIB, leaving a dead gap 07:00–13:00
+// WIB where nothing generates/deploys. We shift +7h into a "WIB frame" (so
+// getUTCHours reads WIB wall-clock), clamp there, then shift back to the real UTC
+// instant to store.
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+function clampToWindowWIB(when: Date, timeStart: number, timeEnd: number): Date {
+  const wib = new Date(when.getTime() + WIB_OFFSET_MS);
+  const hour = wib.getUTCHours();
+  if (hour < timeStart) {
+    wib.setUTCHours(randomHourInWindow(timeStart, timeEnd));
+  } else if (hour > timeEnd) {
+    wib.setUTCDate(wib.getUTCDate() + 1);
+    wib.setUTCHours(randomHourInWindow(timeStart, timeEnd));
+  }
+  wib.setUTCMinutes(Math.floor(Math.random() * 60));
+  wib.setUTCSeconds(Math.floor(Math.random() * 60));
+  return new Date(wib.getTime() - WIB_OFFSET_MS);
+}
+
 function calculateNextSchedule(articlesPerWeek: number, timeStart: number, timeEnd: number): Date {
   const hoursPerArticle = (7 * 24) / articlesPerWeek; // e.g., 42 hours for 4/week
   // Add randomness: ±50% jitter
   const jitter = hoursPerArticle * (0.5 + Math.random()); // 50%-150% of interval
   const msFromNow = jitter * 60 * 60 * 1000;
 
-  const next = new Date(Date.now() + msFromNow);
-  // Clamp to time window — if outside, re-randomize across the WHOLE window
-  const hours = next.getHours();
-  if (hours < timeStart) {
-    next.setHours(randomHourInWindow(timeStart, timeEnd));
-  } else if (hours > timeEnd) {
-    next.setDate(next.getDate() + 1);
-    next.setHours(randomHourInWindow(timeStart, timeEnd));
-  }
-  // Randomize minutes
-  next.setMinutes(Math.floor(Math.random() * 60));
-  next.setSeconds(Math.floor(Math.random() * 60));
-
-  return next;
+  // Clamp into the daily window in WIB (not the container's UTC hours).
+  return clampToWindowWIB(new Date(Date.now() + msFromNow), timeStart, timeEnd);
 }
 
 // Idempotently ensure the 5 scheduler-managed Category rows exist for a
@@ -1354,18 +1364,10 @@ export async function activateDomains(domainIds: string[], config?: { articlesPe
   domainIds = domainIds.filter((id) => allowed.has(id));
 
   for (const domainId of domainIds) {
-    // Stagger initial schedule times so they don't all run at once
+    // Stagger initial schedule times so they don't all run at once, then clamp
+    // into the daily window in WIB (not the container's UTC hours).
     const staggerMs = activated * (Math.random() * 30 + 10) * 60 * 1000; // 10-40 min apart
-    const nextTime = new Date(Date.now() + staggerMs);
-    // Clamp to time window — random hour across the whole window, not just timeStart
-    if (nextTime.getHours() < cfg.timeStart) {
-      nextTime.setHours(randomHourInWindow(cfg.timeStart, cfg.timeEnd));
-    }
-    if (nextTime.getHours() > cfg.timeEnd) {
-      nextTime.setDate(nextTime.getDate() + 1);
-      nextTime.setHours(randomHourInWindow(cfg.timeStart, cfg.timeEnd));
-    }
-    nextTime.setMinutes(Math.floor(Math.random() * 60));
+    const nextTime = clampToWindowWIB(new Date(Date.now() + staggerMs), cfg.timeStart, cfg.timeEnd);
 
     await prisma.domainSchedule.upsert({
       where: { domainId },
