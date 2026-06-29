@@ -169,7 +169,7 @@ export default function BacklinksPage() {
       alert("Batas harian tercapai! Coba lagi besok untuk menghindari spam.")
       return
     }
-    const ok = await confirm({ message: `Distribusikan max ${remaining} backlink hari ini?\n\nPRIORITAS: MS → MS 2 → LP → RTP → CN (tipe prioritas tinggi dipasang lebih dulu).\nAnchor text: 60% branded, 30% naked URL, 10% keyword.\nTarget: ${distroStats?.config.percentArticles ?? 30}% artikel mendapat backlink.\n\nBatas harian: ${distroStats?.stats.dailyLimit ?? 15} backlink/hari.` })
+    const ok = await confirm({ message: `Distribusikan max ${remaining} backlink hari ini?\n\nPRIORITAS (bobot): MS > MS 2 > LP > RTP > CN — tiap tipe yg masih punya stok dapat porsi proporsional, jadi semua kategori kebagian (tidak ada yg 0).\nAnchor text: 60% branded, 30% naked URL, 10% keyword.\nTarget: ${distroStats?.config.percentArticles ?? 30}% artikel mendapat backlink.\n\nBatas harian: ${distroStats?.stats.dailyLimit ?? 15} backlink/hari.` })
     if (!ok) return
     setDistributing(true)
     setDistributeResult(null)
@@ -352,13 +352,13 @@ export default function BacklinksPage() {
               <div className="p-2.5 rounded-lg flex items-start gap-2" style={{ background: "rgba(236,72,153,0.1)", border: "1px solid rgba(236,72,153,0.25)" }}>
                 <BarChart3 className="size-3.5 shrink-0 mt-0.5" style={{ color: "#ec4899" }} />
                 <div className="text-[10px]" style={{ color: "var(--secondary-foreground)" }}>
-                  <strong style={{ color: "#ec4899" }}>Prioritas tipe:</strong>{" "}
-                  <span className="font-mono">MS</span> →{" "}
-                  <span className="font-mono">MS 2</span> →{" "}
-                  <span className="font-mono">LP</span> →{" "}
-                  <span className="font-mono">RTP</span> →{" "}
+                  <strong style={{ color: "#ec4899" }}>Bobot tipe:</strong>{" "}
+                  <span className="font-mono">MS</span> &gt;{" "}
+                  <span className="font-mono">MS 2</span> &gt;{" "}
+                  <span className="font-mono">LP</span> &gt;{" "}
+                  <span className="font-mono">RTP</span> &gt;{" "}
                   <span className="font-mono">CN</span>
-                  <div className="mt-0.5 opacity-75">Tipe prioritas tinggi selalu dipasang lebih dulu sampai habis.</div>
+                  <div className="mt-0.5 opacity-75">Tiap tipe yg masih punya stok dapat porsi sesuai bobotnya — semua kategori kebagian, tidak ada yg 0.</div>
                 </div>
               </div>
               <div className="p-2.5 rounded-lg flex items-start gap-2" style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)" }}>

@@ -4,10 +4,15 @@
 // server-side scheduler tick.
 //
 // PERMANENT RULES (do not change without explicit user permission):
-//   1. Type priority — MS > MS 2 > LP > RTP > CN — high-priority types get
-//      placed first, but each backlink "exhausts" at the rule #7 per-backlink
-//      cap so the lower tiers (and the rest of the inventory) actually get a
-//      turn instead of MS monopolising every slot forever.
+//   1. Type priority is a WEIGHT, not a hard gate — MS > MS 2 > LP > RTP > CN.
+//      Each placement slot picks its TYPE by a priority-weighted lottery
+//      (weight = TYPE_PRIORITY) among the types that still have eligible stock,
+//      then the least-placed backlink within that type. Higher tiers win more
+//      slots, but EVERY type with inventory gets a proportional share every run.
+//      (Old behaviour was strict drain: the whole MS tier had to exhaust before
+//      any LP got a turn, and LP before any RTP/CN — which starved RTP/CN to 0
+//      forever once the upper tiers had thousands of unsaturated slots. Fixed
+//      2026-06-29 at Sandi's request: "LP, RTP, CN masih 0".)
 //   2. Daily anti-spam limit — max N placements per 24h (BacklinkConfig.maxPerDay).
 //   3. Per-domain cap — max maxPerDomain placements per domain.
 //   4. Per-article cap — max maxPerArticle placements per article.
@@ -49,6 +54,50 @@ const MAX_PLACEMENTS_PER_BACKLINK = 30;
 function priorityOf(type: string | null | undefined): number {
   if (!type) return 0;
   return TYPE_PRIORITY[type.trim()] ?? 0;
+}
+
+// Weighted-by-type backlink picker (rule #1). For each slot we pick the TYPE via
+// a priority-weighted lottery over the types that currently have eligible stock,
+// then the least-placed backlink within that type. This replaces the old
+// strict-priority `.find()` (drain the whole MS tier, then MS 2, then LP …),
+// which starved RTP/CN to 0 because the upper tiers always had unsaturated slots
+// left. Untyped backlinks get a small floor weight so they still occasionally
+// place. Returns null when nothing is eligible.
+function pickBacklinkForSlot<T extends { id: string; type?: string | null }>(
+  pool: T[],
+  isEligible: (bl: T) => boolean,
+  placedCount: Map<string, number>,
+): T | null {
+  const groups = new Map<string, T[]>();
+  for (const bl of pool) {
+    if (!isEligible(bl)) continue;
+    const key = (bl.type || "").trim() || "_untyped";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(bl);
+  }
+  if (groups.size === 0) return null;
+
+  const keys = [...groups.keys()];
+  const weightOf = (k: string) => (k === "_untyped" ? 10 : TYPE_PRIORITY[k] ?? 10);
+  const totalWeight = keys.reduce((s, k) => s + weightOf(k), 0);
+  let roll = Math.random() * totalWeight;
+  let chosenKey = keys[keys.length - 1];
+  for (const k of keys) {
+    roll -= weightOf(k);
+    if (roll <= 0) {
+      chosenKey = k;
+      break;
+    }
+  }
+
+  // Within the chosen type, least-placed first (spread within the tier), random
+  // tiebreak so we don't always re-hit the same id.
+  const group = groups.get(chosenKey)!;
+  group.sort((a, b) => {
+    const d = (placedCount.get(a.id) ?? 0) - (placedCount.get(b.id) ?? 0);
+    return d !== 0 ? d : Math.random() - 0.5;
+  });
+  return group[0];
 }
 
 // Niche → allowed article topicCategory whitelist.
@@ -367,8 +416,10 @@ export async function distributeBacklinks(
       (existingPlacementsByDomain[article.domainId] ?? 0) + article.backlinkPlacements.length;
   }
 
-  // Sort by priority — MS first, then least-placed first within a tier so a
-  // freshly-added MS (0 placements) jumps ahead of one that's already saturated.
+  // Candidate pool. Selection order is now decided per-slot by
+  // pickBacklinkForSlot (weighted-by-type lottery, rule #1); this pre-sort is
+  // just a stable, sensible default ordering of the pool (priority then
+  // least-placed) and no longer dictates which backlink wins a slot.
   const sortedBacklinks = [...backlinks].sort((a, b) => {
     const dp = priorityOf(b.type) - priorityOf(a.type);
     if (dp !== 0) return dp;
@@ -461,15 +512,19 @@ export async function distributeBacklinks(
       if ((perServerToday[articleServerId] ?? 0) >= effectiveServerCap) break;
 
       const existingBacklinkIds = new Set(article.backlinkPlacements.map((p) => p.backlinkId));
-      const availableBacklink = sortedBacklinks.find((bl) => {
-        if (existingBacklinkIds.has(bl.id)) return false;
-        // Rule #7: skip backlinks that have hit the per-backlink placement cap,
-        // so the slot falls through to the next priority instead of re-using a
-        // saturated top-tier backlink forever.
-        if ((placedCount.get(bl.id) ?? 0) >= MAX_PLACEMENTS_PER_BACKLINK) return false;
-        if (enableNicheMatch && !nicheMatchesArticle(bl.niche, article.topicCategory)) return false;
-        return true;
-      });
+      const availableBacklink = pickBacklinkForSlot(
+        sortedBacklinks,
+        (bl) => {
+          if (existingBacklinkIds.has(bl.id)) return false;
+          // Rule #7: skip backlinks that have hit the per-backlink placement cap,
+          // so the slot falls through to another backlink instead of re-using a
+          // saturated one forever.
+          if ((placedCount.get(bl.id) ?? 0) >= MAX_PLACEMENTS_PER_BACKLINK) return false;
+          if (enableNicheMatch && !nicheMatchesArticle(bl.niche, article.topicCategory)) return false;
+          return true;
+        },
+        placedCount,
+      );
       if (!availableBacklink) continue;
 
       // Count attempt against the strategy bucket.
