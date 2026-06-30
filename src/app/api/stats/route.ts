@@ -5,6 +5,7 @@ import {
   getLiveCount,
   getDeadCount,
   getEverDeployedCount,
+  getActiveDomainsTotal,
   jakartaTodayStart,
 } from "@/lib/domain-stats";
 
@@ -28,6 +29,7 @@ const getCachedStats = unstable_cache(
       totalDomains, totalArticles, recentDeploys, activeThemes, totalServers,
       healthyServers,
       totalBacklinks, deployedDomains, aliveDomains, deadDomains,
+      activeDomainsTotal,
       schedulerActive, schedulerRunning,
       todayArticles, todayDeploys,
       indexedDomains,
@@ -54,6 +56,11 @@ const getCachedStats = unstable_cache(
       getEverDeployedCount(),
       getLiveCount(),
       getDeadCount(),
+      // Active fleet = domains in real inventory (not write-off / adult /
+      // archived-server). This is the honest denominator for "what % of the
+      // fleet we actually run is live" — vs totalDomains (raw count incl. the
+      // 285 write-offs + dead) which drags readiness down to ~34%.
+      getActiveDomainsTotal(),
       prisma.domainSchedule.count({ where: { isActive: true } }),
       prisma.schedulerConfig.findFirst({ select: { isRunning: true } }),
       prisma.schedulerJob.count({ where: { createdAt: { gte: todayStart }, status: "success" } }),
@@ -116,6 +123,7 @@ const getCachedStats = unstable_cache(
       everDeployed: deployedDomains,
       aliveDomains,
       deadDomains,
+      activeDomains: activeDomainsTotal,
       schedulerActive,
       schedulerRunning: schedulerRunning?.isRunning ?? false,
       todayArticles,

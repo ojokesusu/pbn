@@ -58,6 +58,7 @@ interface Stats {
   everDeployed: number;
   aliveDomains: number;
   deadDomains: number;
+  activeDomains: number;
   schedulerActive: number;
   schedulerRunning: boolean;
   todayArticles: number;
@@ -348,6 +349,11 @@ export default function Home() {
   const everDeployedCount = stats?.everDeployed ?? deployedCount;
   const totalDomains = stats?.totalDomains ?? 0;
   const readinessPercent = totalDomains > 0 ? Math.round((aliveCount / totalDomains) * 100) : 0;
+  // Active fleet = inventory we actually run (excludes write-off / mati / archived).
+  // readinessPercent above divides by ALL domains incl. write-offs so it reads ~34%;
+  // this divides by the active fleet so it reflects "how much of what we run is live".
+  const activeFleetTotal = stats?.activeDomains ?? 0;
+  const activeFleetPercent = activeFleetTotal > 0 ? (aliveCount / activeFleetTotal) * 100 : 0;
 
   const cardBase =
     "rounded-xl border border-[color:var(--border)] bg-white hover-lift animate-bounce-in";
@@ -685,6 +691,11 @@ export default function Home() {
             <div className="flex items-center justify-center py-2">
               <DonutChart percentage={loading ? 0 : readinessPercent} label="Live" />
             </div>
+            {!loading && (
+              <p className="text-center text-[9px] text-[color:var(--muted-foreground)] -mt-1">
+                dari total {totalDomains} domain terdaftar (termasuk write-off &amp; mati)
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-2 mt-3">
               <div className="rounded-lg px-3 py-2" style={{ background: "rgba(16,185,129,0.06)" }}>
                 <p className="text-lg font-bold text-[#10b981]">{loading ? "—" : aliveCount}</p>
@@ -702,6 +713,19 @@ export default function Home() {
                 <p className="text-lg font-bold text-[#f59e0b]">{loading ? "—" : Math.max(0, everDeployedCount - aliveCount)}</p>
                 <p className="text-[10px] text-[color:var(--muted-foreground)]">Deploy turun</p>
               </div>
+            </div>
+            {/* Active-fleet readiness — the honest % (excludes write-off/mati/archived).
+                Distinct from the donut above, which divides by ALL registered domains. */}
+            <div className="mt-2 rounded-lg px-3 py-2 flex items-center justify-between" style={{ background: "rgba(14,165,233,0.07)", border: "1px solid rgba(14,165,233,0.18)" }}>
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium" style={{ color: "#0ea5e9" }}>Armada aktif live</p>
+                <p className="text-[9px] text-[color:var(--muted-foreground)] mt-0.5">
+                  {loading ? "—" : `${aliveCount}/${activeFleetTotal} domain aktif (tanpa write-off & mati)`}
+                </p>
+              </div>
+              <p className="text-2xl font-extrabold tabular-nums shrink-0" style={{ color: "#0ea5e9" }}>
+                {loading ? "—" : `${activeFleetPercent.toFixed(1)}%`}
+              </p>
             </div>
           </div>
           </FunCard>
