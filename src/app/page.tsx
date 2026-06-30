@@ -679,8 +679,8 @@ export default function Home() {
         {/* ═══════ Second Row: Readiness + Health + Deploy ═══════ */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Domain Readiness Donut */}
-          <FunCard delay={500}>
-          <div className="rounded-xl border border-[color:var(--border)] bg-white p-6">
+          <FunCard delay={500} className="h-full">
+          <div className="rounded-xl border border-[color:var(--border)] bg-white p-6 h-full">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-semibold text-[color:var(--foreground)]">Kesiapan Deploy</h3>
@@ -731,8 +731,8 @@ export default function Home() {
           </FunCard>
 
           {/* Health Overview */}
-          <FunCard delay={600}>
-          <div className="rounded-xl border border-[color:var(--border)] bg-white p-6">
+          <FunCard delay={600} className="h-full">
+          <div className="rounded-xl border border-[color:var(--border)] bg-white p-6 h-full">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-semibold text-[color:var(--foreground)]">Kesehatan Domain</h3>
@@ -749,8 +749,8 @@ export default function Home() {
           </FunCard>
 
           {/* Quick Actions */}
-          <FunCard delay={700}>
-          <div className="rounded-xl border border-[color:var(--border)] bg-white p-6">
+          <FunCard delay={700} className="h-full">
+          <div className="rounded-xl border border-[color:var(--border)] bg-white p-6 h-full">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-semibold text-[color:var(--foreground)]">Aksi Cepat</h3>
